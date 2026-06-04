@@ -53,7 +53,15 @@ next-env.d.ts
 *.jpeg
 
 # Claude Code local settings
-.claude/settings.local.json
+.claude/
+
+# Agent instructions (本地使用，不上传)
+AGENTS.md
+CLAUDE.md
+CONTRIBUTING.md
+
+# GitHub templates (本地使用，不上传)
+.github/
 
 # 面试准备文件（不提交）
 ROADSHOW_PREP.md
