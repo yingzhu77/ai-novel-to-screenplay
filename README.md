@@ -1,73 +1,36 @@
-# [项目名称]
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-> 七牛云 × XEngineer 暑期实训营作品
+## Getting Started
 
-## 项目简介
-
-[简要描述项目功能和解决的问题]
-
-## 功能特性
-
-- [功能1]
-- [功能2]
-- [功能3]
-
-## 技术栈
-
-| 层级 | 技术 | 版本 |
-|------|------|------|
-| 前端 | [框架] | [版本] |
-| 后端 | [框架] | [版本] |
-| 数据库 | [数据库] | [版本] |
-
-## 本地开发
-
-### 环境要求
-
-- Node.js >= [版本]
-- [其他依赖]
-
-### 安装与运行
+First, run the development server:
 
 ```bash
-# 克隆仓库
-git clone [仓库地址]
-cd [项目目录]
-
-# 安装依赖
-npm install
-
-# 配置环境变量
-cp .env.example .env
-
-# 启动开发服务器
 npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-## 项目结构
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```
-├── src/
-│   ├── components/    # UI 组件
-│   ├── pages/         # 页面
-│   ├── services/      # 业务逻辑
-│   └── utils/         # 工具函数
-├── public/            # 静态资源
-└── tests/             # 测试文件
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-## 第三方依赖
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-| 依赖 | 用途 | 许可证 |
-|------|------|--------|
-| [依赖名] | [用途] | [许可证] |
+## Learn More
 
-## Demo 演示
+To learn more about Next.js, take a look at the following resources:
 
-[嵌入B站视频或GIF]
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-![Demo](demo.gif)
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## 开发者
+## Deploy on Vercel
 
-- [姓名] - [GitHub链接]
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
