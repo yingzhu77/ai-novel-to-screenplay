@@ -14,45 +14,17 @@ export interface ConvertResult {
   error?: string;
 }
 
-const SYSTEM_PROMPT = `你是一位专业的剧本改编师。将小说章节转换为 JSON 格式的剧本。
+const SYSTEM_PROMPT = `小说转剧本JSON。字段名不可改动：
 
-## 必须严格遵守的 JSON 结构（字段名不可改动）
+{"chapter_number":1,"chapter_title":"","scene_count":1,"characters":[{"id":"CHAR_1","name":"","aliases":[],"role":"主角/配角","description":"","traits":[]}],"scenes":[{"scene_id":"CH1_SC1","scene_heading":"INT. 地点 - 时间","location":"","time":"","characters_present":[],"action":"舞台指示","dialogues":[{"index":1,"speaker":"","text":"","emotion":"","action":""}]}]}
 
-{"chapter_number":1,"chapter_title":"第一章 标题","scene_count":1,"characters":[{"id":"CHAR_1","name":"角色名","aliases":[],"role":"主角/配角","description":"简介","traits":["特征"]}],"scenes":[{"scene_id":"CH1_SC1","scene_heading":"INT. 地点 - 时间","location":"地点名","time":"时间描述","characters_present":["角色A"],"action":"舞台指示/动作描写文字","dialogues":[{"index":1,"speaker":"说话人","text":"台词内容","emotion":"情绪","action":"伴随动作"}]}]}
-
-## 字段说明
-
-characters 数组：
-- id: 唯一标识，格式 CHAR_N（N 从 1 递增）
-- name: 角色姓名（使用小说中的原名）
-- aliases: 别名/昵称列表，无则为空数组
-- role: "主角"、"反派"、"配角" 之一
-- description: 外貌与身份简介（从原文提取）
-- traits: 性格特征数组（从行为推断）
-
-scenes 数组：
-- scene_id: 格式 CH{章节号}_SC{场景序号}，如 CH1_SC1
-- scene_heading: 格式 "INT./EXT. 具体地点 - 时间描述"（如 "INT. 客栈大堂 - 傍晚"）
-- location: 具体地点名称
-- time: 时间描述（如"清晨"、"深夜"、"午后"）
-- characters_present: 本场出场角色名
-- action: 将叙述文字改写为舞台指示（第三人称 present tense，描述动作和环境）
-- dialogues: 对话数组，每项必须有 index、speaker、text
-- 可选字段：emotion（情绪）、action（伴随动作）、subtext（潜台词）、notes（编剧备注）
-
-## 转换规则
-
-1. 角色提取：从章节中提取所有出现的角色，包括只提到名字的角色
-2. 场景分割：根据以下变化分割场景——地点变换、时间跳跃、主要事件切换、新角色登场
-3. 对话提取：准确提取所有对白，保留原文措辞，不要改写台词
-4. 舞台指示：将叙述性文字改写为简洁的舞台指示，使用 present tense（"张三走进"而非"张三走了进去"）
-5. 情绪标注：根据上下文推断每句台词的情绪（如平静、愤怒、无奈、紧张、喜悦）
-6. 伴随动作：如果台词伴有动作（如"拍桌子说"），填入 action 字段
-7. 角色一致性：同一角色在不同场景中的名字、描述必须一致
-
-## 输出
-
-只输出 JSON，无其他文字。`;
+规则：
+1. characters提取所有角色，id格式CHAR_N
+2. scenes按地点/时间/事件变化分割
+3. scene_heading必须INT./EXT.开头
+4. action用present tense改写叙述
+5. dialogues保留原文台词，emotion推断情绪
+6. 只输出JSON。`;
 
 function buildUserPrompt(
   chapter: { number: number; title: string; content: string },
@@ -105,7 +77,7 @@ export async function convertChapterToScreenplay(
       ],
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 8192,
+      max_tokens: 4096,
     });
 
     const content = response.choices[0]?.message?.content;
