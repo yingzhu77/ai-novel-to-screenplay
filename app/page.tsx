@@ -59,6 +59,7 @@ export default function Home() {
   const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [viewMode, setViewMode] = useState<"input" | "result">("input");
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: number; chapters: number }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -66,12 +67,30 @@ export default function Home() {
   useEffect(() => { setHistory(loadHistory()); }, []);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext !== "txt" && ext !== "md") { alert("目前仅支持 .txt 和 .md 文件"); return; }
-    const text = await file.text();
-    setNovelText(text);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processFiles(Array.from(files));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const processFiles = async (files: File[]) => {
+    const validFiles = files.filter((f) => {
+      const ext = f.name.split(".").pop()?.toLowerCase();
+      return ext === "txt" || ext === "md";
+    });
+    if (validFiles.length === 0) { alert("目前仅支持 .txt 和 .md 文件"); return; }
+
+    let allText = "";
+    const fileInfo: { name: string; size: number; chapters: number }[] = [];
+    for (const file of validFiles) {
+      const text = await file.text();
+      allText += (allText ? "\n\n" : "") + text;
+      // Quick chapter count
+      const chapterMatches = text.match(/^(第[一二三四五六七八九十百零〇\d]+[章节回幕]|Chapter\s+\d+)/gim);
+      fileInfo.push({ name: file.name, size: file.size, chapters: chapterMatches?.length || 1 });
+    }
+    setNovelText(allText);
+    setUploadedFiles(fileInfo);
   };
 
   const handleParse = useCallback(async () => {
@@ -257,45 +276,62 @@ export default function Home() {
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
-            const file = e.dataTransfer.files[0];
-            if (file) {
-              const ext = file.name.split(".").pop()?.toLowerCase();
-              if (ext === "txt" || ext === "md") {
-                file.text().then(setNovelText);
-              }
-            }
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) processFiles(files);
           }}
         >
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">小说转剧本</h1>
           <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
 
-          {/* Textarea */}
+          {/* Textarea / File Info */}
           <div className="bg-card rounded-2xl shadow-sm border border-border p-4 sm:p-6 mb-6">
-            <Textarea
-              placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
-              className="min-h-[180px] sm:min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40"
-              value={novelText}
-              onChange={(e) => setNovelText(e.target.value)}
-            />
+            {uploadedFiles.length > 0 ? (
+              <div className="space-y-2">
+                {uploadedFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg bg-muted/50 px-4 py-3">
+                    <FileText className="size-5 text-rose-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{f.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(f.size / 1024).toFixed(1)} KB · {f.chapters} 个章节
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setUploadedFiles([]); setNovelText(""); }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      移除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Textarea
+                placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
+                className="min-h-[180px] sm:min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40"
+                value={novelText}
+                onChange={(e) => setNovelText(e.target.value)}
+              />
+            )}
           </div>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <input ref={fileInputRef} type="file" accept=".txt,.md" onChange={handleFileUpload} className="hidden" />
+            <input ref={fileInputRef} type="file" accept=".txt,.md" multiple onChange={handleFileUpload} className="hidden" />
             <div className="flex flex-col items-center gap-1.5">
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
               >
                 <Upload className="size-5" />
                 选择小说文件
               </button>
-              <span className="text-xs text-muted-foreground">当前支持 .txt / .md 格式</span>
+              <span className="text-xs text-muted-foreground">当前支持 .txt / .md 格式，可多选</span>
             </div>
             <button
               onClick={handleParse}
               disabled={!novelText.trim() || isParsing}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base sm:text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer min-w-[44px]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-14 px-8 sm:px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base sm:text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer min-w-[44px]"
             >
               <FileText className="size-5" />
               {isParsing ? "解析中..." : "解析章节"}
@@ -306,7 +342,7 @@ export default function Home() {
         /* Result View */
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-8">
           <button
-            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); }}
+            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); setUploadedFiles([]); setNovelText(""); }}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             ← 返回上传
