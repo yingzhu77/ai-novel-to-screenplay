@@ -104,7 +104,7 @@ async function testPrompt(name: string, systemPrompt: string): Promise<EvalResul
     const parsed = JSON.parse(content);
 
     // Schema validation
-    const { ChapterScreenplaySchema, CharacterSchema } = await import("../lib/schema.ts");
+    const { ChapterScreenplaySchema, CharacterSchema } = await import("../lib/schema");
     const { characters: _c, ...chapterData } = parsed;
     const schemaResult = ChapterScreenplaySchema.safeParse(chapterData);
 
