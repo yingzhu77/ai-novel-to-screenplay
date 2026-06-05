@@ -29,6 +29,8 @@ export default function Home() {
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null);
   const [copied, setCopied] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -118,11 +120,31 @@ export default function Home() {
       }
     }
     if (allScenes.length > 0) {
-      setScreenplay({
+      const finalScreenplay: Screenplay = {
         meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: allScenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
         characters: allCharacters,
         chapters: allScenes,
-      });
+      };
+      setScreenplay(finalScreenplay);
+
+      // Auto-save to Qiniu Kodo
+      setIsSaving(true);
+      setCloudUrl(null);
+      try {
+        const storageRes = await fetch("/api/storage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
+        });
+        const storageData = await storageRes.json();
+        if (storageData.success && storageData.data?.downloadUrl) {
+          setCloudUrl(storageData.data.downloadUrl);
+        }
+      } catch {
+        // Storage failure is non-blocking
+      } finally {
+        setIsSaving(false);
+      }
     }
     setIsConverting(false);
   }, [chapters, selectedChapters]);
@@ -275,6 +297,21 @@ export default function Home() {
                   </Button>
                 </div>
               </CardHeader>
+              {(isSaving || cloudUrl) && (
+                <div className="px-4 pb-3">
+                  {isSaving && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="size-3 animate-spin" /> 正在保存到七牛云...
+                    </p>
+                  )}
+                  {cloudUrl && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-green-600 dark:text-green-400">已保存到云端</span>
+                      <a href={cloudUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[300px]">云端下载链接</a>
+                    </div>
+                  )}
+                </div>
+              )}
               <CardContent>
                 <Tabs defaultValue="preview">
                   <TabsList className="h-9">
