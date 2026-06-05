@@ -82,7 +82,7 @@ export default function Home() {
 
     const allScenes: ChapterScreenplay[] = [];
     const allCharacters = [...existingCharacters];
-    let novelTitle = "Novel";
+    const novelTitle = "Novel";
 
     for (const chapter of toConvert) {
       // Mark as converting
