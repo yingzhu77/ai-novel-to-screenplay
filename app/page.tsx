@@ -76,17 +76,26 @@ export default function Home() {
   const processFiles = async (files: File[]) => {
     const validFiles = files.filter((f) => {
       const ext = f.name.split(".").pop()?.toLowerCase();
-      return ext === "txt" || ext === "md";
+      return ext === "txt" || ext === "md" || ext === "docx";
     });
-    if (validFiles.length === 0) { alert("目前仅支持 .txt 和 .md 文件"); return; }
+    if (validFiles.length === 0) { alert("目前仅支持 .txt、.md 和 .docx 文件"); return; }
 
     let allText = "";
     const fileInfo: { name: string; size: number; chapters: number }[] = [];
     for (const file of validFiles) {
-      const text = await file.text();
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let text: string;
+      if (ext === "docx") {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } else {
+        text = await file.text();
+      }
       allText += (allText ? "\n\n" : "") + text;
       // Quick chapter count
-      const chapterMatches = text.match(/^(第[一二三四五六七八九十百零〇\d]+[章节回幕]|Chapter\s+\d+)/gim);
+      const chapterMatches = text.match(/^(#{0,3}\s*)(第[一二三四五六七八九十百零〇\d]+[章节回幕]|Chapter\s+\d+)/gim);
       fileInfo.push({ name: file.name, size: file.size, chapters: chapterMatches?.length || 1 });
     }
     setNovelText(allText);
@@ -317,7 +326,7 @@ export default function Home() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <input ref={fileInputRef} type="file" accept=".txt,.md" multiple onChange={handleFileUpload} className="hidden" />
+            <input ref={fileInputRef} type="file" accept=".txt,.md,.docx" multiple onChange={handleFileUpload} className="hidden" />
             <div className="flex flex-col items-center gap-1.5">
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -326,7 +335,7 @@ export default function Home() {
                 <Upload className="size-5" />
                 选择小说文件
               </button>
-              <span className="text-xs text-muted-foreground">当前支持 .txt / .md 格式，可多选</span>
+              <span className="text-xs text-muted-foreground">当前支持 .txt / .md / .docx 格式，可多选</span>
             </div>
             <button
               onClick={handleParse}

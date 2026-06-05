@@ -75,15 +75,15 @@ function findChapterMatches(text: string): { index: number; number: number; titl
         if (pattern === CHAPTER_PATTERNS[2]) {
           // English pattern: # Chapter X (group 1 = markdown prefix, group 2 = Chapter, group 3 = number)
           chapterNum = parseInt(match[3], 10);
-          title = trimmed.replace(/^#{0,3}\s*/, "");
+          title = trimmed;
         } else if (pattern === CHAPTER_PATTERNS[0]) {
           // Chinese with Chinese numerals
           chapterNum = chineseToNumber(match[1]);
-          title = trimmed.replace(/^#{0,3}\s*/, "");
+          title = trimmed;
         } else {
           // Chinese with Arabic numerals
           chapterNum = parseInt(match[1], 10);
-          title = trimmed.replace(/^#{0,3}\s*/, "");
+          title = trimmed;
         }
 
         matches.push({ index: charIndex, number: chapterNum, title });
