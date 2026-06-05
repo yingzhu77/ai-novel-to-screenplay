@@ -252,7 +252,20 @@ export default function Home() {
       {/* Hero / Input Section */}
       <main className="flex-1">
         {viewMode === "input" ? (
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center">
+        <div
+          className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const file = e.dataTransfer.files[0];
+            if (file) {
+              const ext = file.name.split(".").pop()?.toLowerCase();
+              if (ext === "txt" || ext === "md") {
+                file.text().then(setNovelText);
+              }
+            }
+          }}
+        >
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">小说转剧本</h1>
           <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
 
@@ -269,13 +282,16 @@ export default function Home() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <input ref={fileInputRef} type="file" accept=".txt,.md" onChange={handleFileUpload} className="hidden" />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
-            >
-              <Upload className="size-5" />
-              选择小说文件
-            </button>
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
+              >
+                <Upload className="size-5" />
+                选择小说文件
+              </button>
+              <span className="text-xs text-muted-foreground">当前支持 .txt / .md 格式</span>
+            </div>
             <button
               onClick={handleParse}
               disabled={!novelText.trim() || isParsing}
@@ -285,7 +301,6 @@ export default function Home() {
               {isParsing ? "解析中..." : "解析章节"}
             </button>
           </div>
-          <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt / .md 文件拖动到这里</p>
         </div>
         ) : (
         /* Result View */
