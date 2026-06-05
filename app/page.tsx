@@ -142,7 +142,7 @@ export default function Home() {
       <nav className="bg-card border-b border-border sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.webp" alt="AI Screenwriter" className="size-7 rounded" />
+            <img src="/logo.webp" alt="AI Screenwriter" className="size-7 rounded dark:brightness-150" />
             <span className="font-bold text-lg">AI Screenwriter</span>
           </div>
           <div className="flex items-center gap-3">
