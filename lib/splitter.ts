@@ -44,14 +44,14 @@ function chineseToNumber(cn: string): number {
 }
 
 // Regex patterns for chapter detection
-// Matches: 第一章, 第1章, 第十二章, Chapter 1, CHAPTER 1, etc.
+// Matches: 第一章, # 第一章, 第1章, 第十二章, Chapter 1, # Chapter 1, etc.
 const CHAPTER_PATTERNS = [
-  // Chinese: 第X章/节/回 (Chinese numerals)
-  /^第([一二三四五六七八九十百零〇]+)[章节回幕](?:\s+(.+))?$/m,
-  // Chinese: 第X章/节/回 (Arabic numerals)
-  /^第(\d+)[章节回幕](?:\s+(.+))?$/m,
-  // English: Chapter X / CHAPTER X
-  /^(Chapter|CHAPTER)\s+(\d+)(?:\s+(.+))?$/m,
+  // Chinese: 第X章/节/回 (Chinese numerals), with optional markdown # prefix
+  /^#{0,3}\s*第([一二三四五六七八九十百零〇]+)[章节回幕](?:\s+(.+))?$/m,
+  // Chinese: 第X章/节/回 (Arabic numerals), with optional markdown # prefix
+  /^#{0,3}\s*第(\d+)[章节回幕](?:\s+(.+))?$/m,
+  // English: Chapter X / CHAPTER X, with optional markdown # prefix
+  /^(#{0,3}\s*)(Chapter|CHAPTER)\s+(\d+)(?:\s+(.+))?$/m,
 ];
 
 function findChapterMatches(text: string): { index: number; number: number; title: string }[] {
@@ -73,17 +73,17 @@ function findChapterMatches(text: string): { index: number; number: number; titl
         let title: string;
 
         if (pattern === CHAPTER_PATTERNS[2]) {
-          // English pattern: Chapter X
-          chapterNum = parseInt(match[2], 10);
-          title = trimmed;
+          // English pattern: # Chapter X (group 1 = markdown prefix, group 2 = Chapter, group 3 = number)
+          chapterNum = parseInt(match[3], 10);
+          title = trimmed.replace(/^#{0,3}\s*/, "");
         } else if (pattern === CHAPTER_PATTERNS[0]) {
           // Chinese with Chinese numerals
           chapterNum = chineseToNumber(match[1]);
-          title = trimmed;
+          title = trimmed.replace(/^#{0,3}\s*/, "");
         } else {
           // Chinese with Arabic numerals
           chapterNum = parseInt(match[1], 10);
-          title = trimmed;
+          title = trimmed.replace(/^#{0,3}\s*/, "");
         }
 
         matches.push({ index: charIndex, number: chapterNum, title });
