@@ -129,7 +129,8 @@ export async function convertChapterToScreenplay(
     }
 
     // Validate chapter screenplay (remove characters from parsed before validation)
-    const { characters: _, ...chapterData } = parsed;
+    const chapterData = { ...parsed };
+    delete chapterData.characters;
     const result = ChapterScreenplaySchema.safeParse(chapterData);
     if (!result.success) {
       return {

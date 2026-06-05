@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, FileText, Play, Loader2, CheckCircle2, AlertCircle, Download, Copy, Check, Sparkles } from "lucide-react";
+import { Upload, FileText, Play, Loader2, CheckCircle2, AlertCircle, Download, Copy, Check, Sparkles, Sun, Moon } from "lucide-react";
 import type { Screenplay, Character, ChapterScreenplay } from "@/lib/schema";
 import yaml from "js-yaml";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -28,6 +29,7 @@ export default function Home() {
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { theme, setTheme } = useTheme();
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -94,7 +96,6 @@ export default function Home() {
           continue;
         }
         allScenes.push(data.data as ChapterScreenplay);
-        // Collect new characters, deduplicate by name
         if (Array.isArray(data.characters)) {
           for (const char of data.characters) {
             if (!allCharacters.some((c) => c.name === char.name)) {
@@ -136,29 +137,41 @@ export default function Home() {
   const convertingCount = chapters.filter((c) => c.status === "converting").length;
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f7f7f7]">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Nav */}
-      <nav className="bg-white border-b border-gray-100">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <nav className="bg-card border-b border-border sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Sparkles className="size-5 text-rose-500" />
             <span className="font-bold text-lg">AI Screenwriter</span>
           </div>
-          <span className="text-xs text-muted-foreground">七牛云 × XEngineer</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground hidden sm:inline">七牛云 × XEngineer</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label="切换深色模式"
+              className="h-11 w-11"
+            >
+              <Sun className="size-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute size-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+            </Button>
+          </div>
         </div>
       </nav>
 
       {/* Hero / Input Section */}
       <main className="flex-1">
-        <div className="max-w-3xl mx-auto px-4 pt-16 pb-12 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">小说转剧本</h1>
-          <p className="text-lg text-gray-500 mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-3">小说转剧本</h1>
+          <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
 
           {/* Textarea */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-4 sm:p-6 mb-6">
             <Textarea
               placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
-              className="min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-gray-300"
+              className="min-h-[180px] sm:min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40"
               value={novelText}
               onChange={(e) => setNovelText(e.target.value)}
             />
@@ -169,7 +182,7 @@ export default function Home() {
             <input ref={fileInputRef} type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
             >
               <Upload className="size-5" />
               选择小说文件
@@ -177,19 +190,19 @@ export default function Home() {
             <button
               onClick={handleParse}
               disabled={!novelText.trim() || isParsing}
-              className="inline-flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-gray-900 hover:bg-gray-800 text-white text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base sm:text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer min-w-[44px]"
             >
               <FileText className="size-5" />
               {isParsing ? "解析中..." : "解析章节"}
             </button>
           </div>
-          <p className="text-sm text-gray-400 mt-4">或者把 .txt 文件拖动到这里</p>
+          <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt 文件拖动到这里</p>
         </div>
 
-        {/* Chapter List - appears after parsing */}
+        {/* Chapter List */}
         {chapters.length > 0 && (
-          <div className="max-w-3xl mx-auto px-4 pb-8">
-            <Card className="border-gray-200 shadow-sm">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8">
+            <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <div>
                   <CardTitle className="text-base">
@@ -199,10 +212,10 @@ export default function Home() {
                   {doneCount > 0 && <p className="text-xs text-muted-foreground mt-0.5">{doneCount} 已完成{convertingCount > 0 ? ` · ${convertingCount} 转换中` : ""}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={handleToggleAll} className="text-xs">
+                  <Button variant="ghost" size="sm" onClick={handleToggleAll} className="text-xs h-9">
                     {selectedChapters.size === chapters.length ? "取消全选" : "全选"}
                   </Button>
-                  <Button onClick={handleConvert} disabled={selectedChapters.size === 0 || isConverting} size="sm" className="bg-rose-500 hover:bg-rose-600 text-white">
+                  <Button onClick={handleConvert} disabled={selectedChapters.size === 0 || isConverting} size="sm" className="bg-rose-500 hover:bg-rose-600 text-white h-9">
                     {isConverting ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Play className="mr-1 size-3" />}
                     转换 ({selectedChapters.size})
                   </Button>
@@ -211,8 +224,8 @@ export default function Home() {
               <CardContent>
                 <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
                   {chapters.map((chapter) => (
-                    <div key={chapter.number} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50 transition-colors">
-                      <Checkbox checked={selectedChapters.has(chapter.number)} onCheckedChange={() => handleToggleChapter(chapter.number)} disabled={chapter.status === "converting"} />
+                    <div key={chapter.number} className="flex items-center gap-2.5 rounded-lg border border-border p-2.5 hover:bg-accent/50 transition-colors">
+                      <Checkbox checked={selectedChapters.has(chapter.number)} onCheckedChange={() => handleToggleChapter(chapter.number)} disabled={chapter.status === "converting"} className="h-5 w-5" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-sm truncate">{chapter.title}</span>
@@ -233,57 +246,57 @@ export default function Home() {
 
         {/* Screenplay Output */}
         {screenplay && (
-          <div className="max-w-3xl mx-auto px-4 pb-16">
-            <Card className="border-gray-200 shadow-sm">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
+            <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
                 <CardTitle className="text-base">剧本输出</CardTitle>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleDownload("yaml")} className="text-xs">
+                  <Button variant="outline" size="sm" onClick={() => handleDownload("yaml")} className="text-xs h-9">
                     <Download className="mr-1 size-3" />YAML
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleDownload("json")} className="text-xs">
+                  <Button variant="outline" size="sm" onClick={() => handleDownload("json")} className="text-xs h-9">
                     <Download className="mr-1 size-3" />JSON
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <Tabs defaultValue="preview">
-                  <TabsList className="h-8">
+                  <TabsList className="h-9">
                     <TabsTrigger value="preview" className="text-xs">预览</TabsTrigger>
                     <TabsTrigger value="yaml" className="text-xs">YAML</TabsTrigger>
                     <TabsTrigger value="json" className="text-xs">JSON</TabsTrigger>
                   </TabsList>
                   <TabsContent value="preview" className="mt-3">
                     <div className="space-y-3 max-h-[400px] overflow-auto">
-                      <div className="rounded-lg bg-gray-50 p-3">
+                      <div className="rounded-lg bg-muted/50 p-3">
                         <h3 className="font-semibold text-sm mb-2">角色 ({screenplay.characters.length})</h3>
                         <div className="space-y-2">
                           {screenplay.characters.map((c) => (
-                            <div key={c.id} className="flex items-start gap-2 bg-white rounded-lg border border-gray-100 p-2">
-                              <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5 text-xs font-medium shrink-0">{c.role}</span>
+                            <div key={c.id} className="flex items-start gap-2 bg-card rounded-lg border border-border p-2">
+                              <span className="inline-flex items-center rounded-full bg-rose-500/10 text-rose-500 dark:bg-rose-500/20 px-2 py-0.5 text-xs font-medium shrink-0">{c.role}</span>
                               <div className="min-w-0">
                                 <span className="font-medium text-sm">{c.name}</span>
-                                {c.description && <span className="text-xs text-gray-500 ml-2">{c.description}</span>}
+                                {c.description && <span className="text-xs text-muted-foreground ml-2">{c.description}</span>}
                                 {c.traits.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-0.5">
-                                    {c.traits.map((t) => <span key={t} className="text-[10px] text-gray-400 bg-gray-100 rounded px-1">{t}</span>)}
+                                    {c.traits.map((t) => <span key={t} className="text-[10px] text-muted-foreground bg-muted rounded px-1">{t}</span>)}
                                   </div>
                                 )}
                               </div>
                             </div>
                           ))}
-                          {screenplay.characters.length === 0 && <span className="text-xs text-gray-400">暂无角色</span>}
+                          {screenplay.characters.length === 0 && <span className="text-xs text-muted-foreground">暂无角色</span>}
                         </div>
                       </div>
                       {screenplay.chapters.map((ch) => (
-                        <div key={ch.chapter_number} className="rounded-lg bg-gray-50 p-3">
+                        <div key={ch.chapter_number} className="rounded-lg bg-muted/50 p-3">
                           <h3 className="font-semibold text-sm mb-2">{ch.chapter_title}</h3>
                           {ch.scenes.map((scene) => (
-                            <div key={scene.scene_id} className="ml-3 mb-2 border-l-2 border-gray-200 pl-3">
-                              <p className="text-xs text-gray-500">{scene.scene_heading}</p>
+                            <div key={scene.scene_id} className="ml-3 mb-2 border-l-2 border-border pl-3">
+                              <p className="text-xs text-muted-foreground">{scene.scene_heading}</p>
                               <p className="text-sm mt-0.5">{scene.action}</p>
                               {scene.dialogues.map((d) => (
-                                <p key={d.index} className="text-sm mt-0.5"><span className="font-semibold">{d.speaker}：</span>{d.emotion && <span className="text-gray-400">（{d.emotion}）</span>}{d.text}</p>
+                                <p key={d.index} className="text-sm mt-0.5"><span className="font-semibold">{d.speaker}：</span>{d.emotion && <span className="text-muted-foreground">（{d.emotion}）</span>}{d.text}</p>
                               ))}
                             </div>
                           ))}
@@ -292,16 +305,16 @@ export default function Home() {
                     </div>
                   </TabsContent>
                   <TabsContent value="yaml" className="mt-3 relative">
-                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" onClick={() => handleCopy(yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true }))}>
+                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2 h-9 w-9" onClick={() => handleCopy(yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true }))}>
                       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
                     </Button>
-                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-gray-50 p-3 text-xs font-mono">{yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true })}</pre>
+                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-muted p-3 text-xs font-mono">{yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true })}</pre>
                   </TabsContent>
                   <TabsContent value="json" className="mt-3 relative">
-                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" onClick={() => handleCopy(JSON.stringify(screenplay, null, 2))}>
+                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2 h-9 w-9" onClick={() => handleCopy(JSON.stringify(screenplay, null, 2))}>
                       {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
                     </Button>
-                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-gray-50 p-3 text-xs font-mono">{JSON.stringify(screenplay, null, 2)}</pre>
+                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-muted p-3 text-xs font-mono">{JSON.stringify(screenplay, null, 2)}</pre>
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -311,8 +324,8 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-100 bg-white py-4">
-        <div className="text-center text-xs text-gray-400">
+      <footer className="border-t border-border bg-card py-4">
+        <div className="text-center text-xs text-muted-foreground">
           AI Screenwriter 2026 · Powered by DeepSeek V4 Flash & Qiniu Cloud
         </div>
       </footer>
