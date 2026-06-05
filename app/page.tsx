@@ -99,28 +99,39 @@ export default function Home() {
       const chapter = toConvert[i];
       setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
       setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
-      try {
-        const res = await fetch("/api/convert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
-        });
-        const data = await res.json();
-        if (!data.success) {
-          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: data.error } : c));
-          continue;
-        }
-        allScenes.push(data.data as ChapterScreenplay);
-        if (Array.isArray(data.characters)) {
-          for (const char of data.characters) {
-            if (!allCharacters.some((c) => c.name === char.name)) {
-              allCharacters.push(char);
+
+      let lastError = "";
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch("/api/convert", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
+          });
+          const data = await res.json();
+          if (!data.success) {
+            lastError = data.error;
+            if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
+            break;
+          }
+          allScenes.push(data.data as ChapterScreenplay);
+          if (Array.isArray(data.characters)) {
+            for (const char of data.characters) {
+              if (!allCharacters.some((c) => c.name === char.name)) {
+                allCharacters.push(char);
+              }
             }
           }
+          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
+          lastError = "";
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "未知错误";
+          if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
         }
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
-      } catch (err) {
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: err instanceof Error ? err.message : "未知错误" } : c));
+      }
+      if (lastError) {
+        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: lastError } : c));
       }
     }
     if (allScenes.length > 0) {
