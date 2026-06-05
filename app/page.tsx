@@ -31,6 +31,7 @@ export default function Home() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -90,10 +91,13 @@ export default function Home() {
     const toConvert = chapters.filter((c) => selectedChapters.has(c.number) && c.status !== "done");
     if (toConvert.length === 0) return;
     setIsConverting(true);
+    setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "" });
     const allScenes: ChapterScreenplay[] = [];
     const allCharacters: Character[] = [];
 
-    for (const chapter of toConvert) {
+    for (let i = 0; i < toConvert.length; i++) {
+      const chapter = toConvert[i];
+      setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
       setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
       try {
         const res = await fetch("/api/convert", {
@@ -147,6 +151,7 @@ export default function Home() {
       }
     }
     setIsConverting(false);
+    setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
   }, [chapters, selectedChapters]);
 
   const handleDownload = (format: "yaml" | "json") => {
@@ -229,6 +234,36 @@ export default function Home() {
           </div>
           <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt / .md 文件拖动到这里</p>
         </div>
+
+        {/* Conversion Progress */}
+        {convertProgress.total > 0 && (
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+            <div className="rounded-xl bg-card border border-border p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin text-rose-500" />
+                  <span className="text-sm font-medium">
+                    正在转换 {convertProgress.current}/{convertProgress.total} 章
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {Math.round((convertProgress.current / convertProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${(convertProgress.current / convertProgress.total) * 100}%` }}
+                />
+              </div>
+              {convertProgress.chapterTitle && (
+                <p className="text-xs text-muted-foreground mt-2 truncate">
+                  {convertProgress.chapterTitle}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Chapter List */}
         {chapters.length > 0 && (
