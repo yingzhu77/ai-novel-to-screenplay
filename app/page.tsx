@@ -151,87 +151,95 @@ export default function Home() {
     if (toConvert.length === 0) return;
     setIsConverting(true);
     setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "准备中..." });
-    const allScenes: ChapterScreenplay[] = [];
-    const allCharacters: Character[] = [];
 
-    for (let i = 0; i < toConvert.length; i++) {
-      const chapter = toConvert[i];
-      setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
+    try {
+      const res = await fetch("/api/convert-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapters: toConvert.map((c) => ({ number: c.number, title: c.title, content: c.content })),
+          existingCharacters: [],
+        }),
+      });
 
-      let lastError = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const res = await fetch("/api/convert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
-          });
-          const data = await res.json();
-          if (!data.success) {
-            lastError = data.error;
-            if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
-            break;
-          }
-          allScenes.push(data.data as ChapterScreenplay);
-          if (Array.isArray(data.characters)) {
-            for (const char of data.characters) {
-              if (!allCharacters.some((c) => c.name === char.name)) {
-                allCharacters.push(char);
+      if (!res.ok) throw new Error(`Stream request failed: ${res.status}`);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          let eventType = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              let data: Record<string, unknown>;
+              try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+              if (eventType === "start") {
+                setConvertProgress({ current: 0, total: data.total as number, chapterTitle: "准备中..." });
+              } else if (eventType === "chapter-start") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "converting" as const } : c));
+                setConvertProgress((prev) => ({ ...prev, current: data.index as number, chapterTitle: data.title as string }));
+              } else if (eventType === "chapter-done") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "done" as const } : c));
+                setConvertProgress((prev) => ({ ...prev, current: (data.index as number) + 1 }));
+              } else if (eventType === "chapter-error") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "error" as const, error: data.error as string } : c));
+              } else if (eventType === "done" && (data.scenes as ChapterScreenplay[]).length > 0) {
+                const scenes = data.scenes as ChapterScreenplay[];
+                const characters = data.characters as Character[];
+                const finalScreenplay: Screenplay = {
+                  meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: scenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
+                  characters,
+                  chapters: scenes,
+                };
+                setScreenplay(finalScreenplay);
+
+                setIsSaving(true);
+                setCloudUrl(null);
+                try {
+                  const storageRes = await fetch("/api/storage", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
+                  });
+                  const storageData = await storageRes.json();
+                  if (storageData.success && storageData.data?.downloadUrl) {
+                    setCloudUrl(storageData.data.downloadUrl);
+                    const historyItem: HistoryItem = {
+                      id: `${Date.now()}`, title: finalScreenplay.meta.screenplay_title,
+                      chapterCount: finalScreenplay.chapters.length, characterCount: finalScreenplay.characters.length,
+                      cloudUrl: storageData.data.downloadUrl, createdAt: new Date().toISOString(),
+                    };
+                    saveHistory(historyItem);
+                    setHistory(loadHistory());
+                  }
+                } catch { /* Storage failure is non-blocking */ }
+                finally { setIsSaving(false); }
               }
             }
           }
-          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
-          setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
-          lastError = "";
-          break;
-        } catch (err) {
-          lastError = err instanceof Error ? err.message : "未知错误";
-          if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
         }
-      }
-      if (lastError) {
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: lastError } : c));
-      }
-    }
-    if (allScenes.length > 0) {
-      const finalScreenplay: Screenplay = {
-        meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: allScenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
-        characters: allCharacters,
-        chapters: allScenes,
-      };
-      setScreenplay(finalScreenplay);
-
-      // Auto-save to Qiniu Kodo
-      setIsSaving(true);
-      setCloudUrl(null);
-      try {
-        const storageRes = await fetch("/api/storage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
-        });
-        const storageData = await storageRes.json();
-        if (storageData.success && storageData.data?.downloadUrl) {
-          setCloudUrl(storageData.data.downloadUrl);
-          const historyItem: HistoryItem = {
-            id: `${Date.now()}`,
-            title: finalScreenplay.meta.screenplay_title,
-            chapterCount: finalScreenplay.chapters.length,
-            characterCount: finalScreenplay.characters.length,
-            cloudUrl: storageData.data.downloadUrl,
-            createdAt: new Date().toISOString(),
-          };
-          saveHistory(historyItem);
-          setHistory(loadHistory());
-        }
-      } catch {
-        // Storage failure is non-blocking
       } finally {
-        setIsSaving(false);
+        reader.releaseLock();
       }
+    } catch (err) {
+      alert(`转换出错: ${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setIsConverting(false);
+      setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
     }
-    setIsConverting(false);
-    setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
   }, [chapters, selectedChapters]);
 
   const handleDownload = (format: "yaml" | "json") => {
