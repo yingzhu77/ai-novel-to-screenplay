@@ -28,13 +28,18 @@ export default function Home() {
   const [isConverting, setIsConverting] = useState(false);
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null);
   const [copied, setCopied] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.name.endsWith(".txt")) { alert("目前仅支持 .txt 文件"); return; }
+    const ext = file.name.split(".").pop()?.toLowerCase();
+    if (ext !== "txt" && ext !== "md") { alert("目前仅支持 .txt 和 .md 文件"); return; }
     const text = await file.text();
     setNovelText(text);
   };
@@ -56,6 +61,13 @@ export default function Home() {
       setChapters(parsed);
       setSelectedChapters(new Set(parsed.map((c: ChapterItem) => c.number)));
       setScreenplay(null);
+      // Warn about long chapters (threshold: ~3000 tokens ≈ 6000 chars)
+      const longChapters = parsed.filter((c) => c.content.length > 6000);
+      if (longChapters.length > 0) {
+        setWarnings(longChapters.map((c) => `${c.title} 内容较长（${c.content.length} 字），可能影响转换质量`));
+      } else {
+        setWarnings([]);
+      }
     } catch (err) {
       alert(`解析出错: ${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
@@ -79,43 +91,78 @@ export default function Home() {
     const toConvert = chapters.filter((c) => selectedChapters.has(c.number) && c.status !== "done");
     if (toConvert.length === 0) return;
     setIsConverting(true);
+    setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "" });
     const allScenes: ChapterScreenplay[] = [];
     const allCharacters: Character[] = [];
 
-    for (const chapter of toConvert) {
+    for (let i = 0; i < toConvert.length; i++) {
+      const chapter = toConvert[i];
+      setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
       setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
-      try {
-        const res = await fetch("/api/convert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
-        });
-        const data = await res.json();
-        if (!data.success) {
-          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: data.error } : c));
-          continue;
-        }
-        allScenes.push(data.data as ChapterScreenplay);
-        if (Array.isArray(data.characters)) {
-          for (const char of data.characters) {
-            if (!allCharacters.some((c) => c.name === char.name)) {
-              allCharacters.push(char);
+
+      let lastError = "";
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetch("/api/convert", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
+          });
+          const data = await res.json();
+          if (!data.success) {
+            lastError = data.error;
+            if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
+            break;
+          }
+          allScenes.push(data.data as ChapterScreenplay);
+          if (Array.isArray(data.characters)) {
+            for (const char of data.characters) {
+              if (!allCharacters.some((c) => c.name === char.name)) {
+                allCharacters.push(char);
+              }
             }
           }
+          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
+          lastError = "";
+          break;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : "未知错误";
+          if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
         }
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
-      } catch (err) {
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: err instanceof Error ? err.message : "未知错误" } : c));
+      }
+      if (lastError) {
+        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: lastError } : c));
       }
     }
     if (allScenes.length > 0) {
-      setScreenplay({
+      const finalScreenplay: Screenplay = {
         meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: allScenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
         characters: allCharacters,
         chapters: allScenes,
-      });
+      };
+      setScreenplay(finalScreenplay);
+
+      // Auto-save to Qiniu Kodo
+      setIsSaving(true);
+      setCloudUrl(null);
+      try {
+        const storageRes = await fetch("/api/storage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
+        });
+        const storageData = await storageRes.json();
+        if (storageData.success && storageData.data?.downloadUrl) {
+          setCloudUrl(storageData.data.downloadUrl);
+        }
+      } catch {
+        // Storage failure is non-blocking
+      } finally {
+        setIsSaving(false);
+      }
     }
     setIsConverting(false);
+    setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
   }, [chapters, selectedChapters]);
 
   const handleDownload = (format: "yaml" | "json") => {
@@ -142,11 +189,11 @@ export default function Home() {
       <nav className="bg-card border-b border-border sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/logo.webp" alt="AI Screenwriter" className="size-7 rounded dark:brightness-150" />
+            <Sparkles className="size-5 text-rose-500" />
             <span className="font-bold text-lg">AI Screenwriter</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground hidden sm:inline">七牛云 × XEngineer</span>
+            <span className="text-xs text-muted-foreground hidden sm:inline">从小说到剧本，一键转换</span>
             <Button
               variant="ghost"
               size="icon"
@@ -179,7 +226,7 @@ export default function Home() {
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <input ref={fileInputRef} type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+            <input ref={fileInputRef} type="file" accept=".txt,.md" onChange={handleFileUpload} className="hidden" />
             <button
               onClick={() => fileInputRef.current?.click()}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
@@ -196,8 +243,38 @@ export default function Home() {
               {isParsing ? "解析中..." : "解析章节"}
             </button>
           </div>
-          <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt 文件拖动到这里</p>
+          <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt / .md 文件拖动到这里</p>
         </div>
+
+        {/* Conversion Progress */}
+        {convertProgress.total > 0 && (
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
+            <div className="rounded-xl bg-card border border-border p-4 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="size-4 animate-spin text-rose-500" />
+                  <span className="text-sm font-medium">
+                    正在转换 {convertProgress.current}/{convertProgress.total} 章
+                  </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {Math.round((convertProgress.current / convertProgress.total) * 100)}%
+                </span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${(convertProgress.current / convertProgress.total) * 100}%` }}
+                />
+              </div>
+              {convertProgress.chapterTitle && (
+                <p className="text-xs text-muted-foreground mt-2 truncate">
+                  {convertProgress.chapterTitle}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Chapter List */}
         {chapters.length > 0 && (
@@ -221,6 +298,13 @@ export default function Home() {
                   </Button>
                 </div>
               </CardHeader>
+              {warnings.length > 0 && (
+                <div className="px-4 pb-3">
+                  {warnings.map((w) => (
+                    <p key={w} className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-md px-3 py-1.5">{w}</p>
+                  ))}
+                </div>
+              )}
               <CardContent>
                 <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
                   {chapters.map((chapter) => (
@@ -259,10 +343,27 @@ export default function Home() {
                   </Button>
                 </div>
               </CardHeader>
+              {(isSaving || cloudUrl) && (
+                <div className="px-4 pb-3">
+                  {isSaving && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <Loader2 className="size-3 animate-spin" /> 正在保存到七牛云...
+                    </p>
+                  )}
+                  {cloudUrl && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-green-600 dark:text-green-400">已保存到云端</span>
+                      <a href={cloudUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[300px]">云端下载链接</a>
+                    </div>
+                  )}
+                </div>
+              )}
               <CardContent>
                 <Tabs defaultValue="preview">
                   <TabsList className="h-9">
                     <TabsTrigger value="preview" className="text-xs">预览</TabsTrigger>
+                    <TabsTrigger value="relations" className="text-xs">关系</TabsTrigger>
+                    <TabsTrigger value="compare" className="text-xs">对比</TabsTrigger>
                     <TabsTrigger value="yaml" className="text-xs">YAML</TabsTrigger>
                     <TabsTrigger value="json" className="text-xs">JSON</TabsTrigger>
                   </TabsList>
@@ -302,6 +403,113 @@ export default function Home() {
                           ))}
                         </div>
                       ))}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="relations" className="mt-3">
+                    <div className="rounded-lg bg-muted/50 p-4">
+                      {screenplay.characters.length < 2 ? (
+                        <p className="text-xs text-muted-foreground text-center py-8">至少需要 2 个角色才能生成关系图</p>
+                      ) : (() => {
+                        // Build relationship edges from scene co-occurrence
+                        const edges: { from: string; to: string; weight: number }[] = [];
+                        const edgeMap = new Map<string, number>();
+                        for (const ch of screenplay.chapters) {
+                          for (const scene of ch.scenes) {
+                            const chars = scene.characters_present;
+                            for (let a = 0; a < chars.length; a++) {
+                              for (let b = a + 1; b < chars.length; b++) {
+                                const key = [chars[a], chars[b]].sort().join("|||");
+                                edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
+                              }
+                            }
+                          }
+                        }
+                        edgeMap.forEach((weight, key) => {
+                          const [from, to] = key.split("|||");
+                          edges.push({ from, to, weight });
+                        });
+
+                        // Layout characters in a circle
+                        const n = screenplay.characters.length;
+                        const cx = 200, cy = 150, r = 100;
+                        const positions = new Map<string, { x: number; y: number }>();
+                        screenplay.characters.forEach((c, i) => {
+                          const angle = (2 * Math.PI * i) / n - Math.PI / 2;
+                          positions.set(c.name, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+                        });
+
+                        const roleColors: Record<string, string> = { "主角": "#f43f5e", "反派": "#8b5cf6", "配角": "#6b7280" };
+
+                        return (
+                          <svg viewBox="0 0 400 300" className="w-full max-w-md mx-auto">
+                            {/* Edges */}
+                            {edges.map((e) => {
+                              const p1 = positions.get(e.from);
+                              const p2 = positions.get(e.to);
+                              if (!p1 || !p2) return null;
+                              return (
+                                <line key={e.from + e.to} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+                                  stroke="currentColor" strokeOpacity={0.2} strokeWidth={Math.min(e.weight * 1.5, 4)} />
+                              );
+                            })}
+                            {/* Nodes */}
+                            {screenplay.characters.map((c) => {
+                              const pos = positions.get(c.name);
+                              if (!pos) return null;
+                              const color = roleColors[c.role] || "#6b7280";
+                              return (
+                                <g key={c.id}>
+                                  <circle cx={pos.x} cy={pos.y} r={18} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.5} />
+                                  <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
+                                    className="fill-foreground text-[10px] font-medium">{c.name}</text>
+                                  <text x={pos.x} y={pos.y + 12} textAnchor="middle"
+                                    className="fill-muted-foreground text-[7px]">{c.role}</text>
+                                </g>
+                              );
+                            })}
+                          </svg>
+                        );
+                      })()}
+                      {/* Legend */}
+                      {screenplay.characters.length >= 2 && (
+                        <div className="flex justify-center gap-4 mt-3">
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-rose-500/30 border border-rose-500" />主角</span>
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-purple-500/30 border border-purple-500" />反派</span>
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-gray-500/30 border border-gray-500" />配角</span>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="compare" className="mt-3">
+                    <div className="space-y-4 max-h-[500px] overflow-auto">
+                      {screenplay.chapters.map((ch) => {
+                        const original = chapters.find((c) => c.number === ch.chapter_number);
+                        return (
+                          <div key={ch.chapter_number} className="rounded-lg border border-border overflow-hidden">
+                            <div className="bg-muted/50 px-3 py-2 font-medium text-sm border-b border-border">{ch.chapter_title}</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+                              <div className="p-3">
+                                <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider">原文</p>
+                                <p className="text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">{original?.content || "无原文"}</p>
+                              </div>
+                              <div className="p-3">
+                                <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider">剧本</p>
+                                <div className="space-y-2">
+                                  {ch.scenes.map((scene) => (
+                                    <div key={scene.scene_id}>
+                                      <p className="text-[10px] text-rose-500 dark:text-rose-400 font-medium">{scene.scene_heading}</p>
+                                      <p className="text-xs mt-0.5">{scene.action}</p>
+                                      {scene.dialogues.map((d) => (
+                                        <p key={d.index} className="text-xs mt-0.5"><span className="font-semibold">{d.speaker}：</span>{d.text}</p>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </TabsContent>
                   <TabsContent value="yaml" className="mt-3 relative">
