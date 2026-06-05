@@ -35,7 +35,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const urlResult = await getDownloadUrl(key, 3600);
+    const urlResult = await getDownloadUrl(key, 86400);
     if (!urlResult.success) {
       return Response.json(
         { success: false, error: urlResult.error },

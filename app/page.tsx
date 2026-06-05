@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useState, useCallback, useRef, useEffect, type ChangeEvent } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,31 @@ interface ChapterItem {
   error?: string;
 }
 
+interface HistoryItem {
+  id: string;
+  title: string;
+  chapterCount: number;
+  characterCount: number;
+  cloudUrl: string | null;
+  createdAt: string;
+}
+
+const HISTORY_KEY = "screenwriter-history";
+const MAX_HISTORY = 10;
+
+function loadHistory(): HistoryItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch { return []; }
+}
+
+function saveHistory(item: HistoryItem) {
+  const history = loadHistory().filter((h) => h.id !== item.id);
+  history.unshift(item);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+}
+
 export default function Home() {
   const [novelText, setNovelText] = useState("");
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
@@ -32,8 +57,12 @@ export default function Home() {
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
+
+  // Load history on mount
+  useEffect(() => { setHistory(loadHistory()); }, []);
 
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -154,6 +183,16 @@ export default function Home() {
         const storageData = await storageRes.json();
         if (storageData.success && storageData.data?.downloadUrl) {
           setCloudUrl(storageData.data.downloadUrl);
+          const historyItem: HistoryItem = {
+            id: `${Date.now()}`,
+            title: finalScreenplay.meta.screenplay_title,
+            chapterCount: finalScreenplay.chapters.length,
+            characterCount: finalScreenplay.characters.length,
+            cloudUrl: storageData.data.downloadUrl,
+            createdAt: new Date().toISOString(),
+          };
+          saveHistory(historyItem);
+          setHistory(loadHistory());
         }
       } catch {
         // Storage failure is non-blocking
@@ -454,6 +493,27 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* History */}
+      {history.length > 0 && !screenplay && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8 w-full">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">最近转换</h3>
+          <div className="space-y-2">
+            {history.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-accent/50 transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{item.title}</p>
+                  <p className="text-xs text-muted-foreground">{item.chapterCount} 章 · {item.characterCount} 角色 · {new Date(item.createdAt).toLocaleDateString("zh-CN")}</p>
+                </div>
+                {item.cloudUrl && (
+                  <a href={item.cloudUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-500 hover:underline shrink-0 ml-3">下载</a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-4">
