@@ -362,6 +362,7 @@ export default function Home() {
                 <Tabs defaultValue="preview">
                   <TabsList className="h-9">
                     <TabsTrigger value="preview" className="text-xs">预览</TabsTrigger>
+                    <TabsTrigger value="compare" className="text-xs">对比</TabsTrigger>
                     <TabsTrigger value="yaml" className="text-xs">YAML</TabsTrigger>
                     <TabsTrigger value="json" className="text-xs">JSON</TabsTrigger>
                   </TabsList>
@@ -401,6 +402,38 @@ export default function Home() {
                           ))}
                         </div>
                       ))}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="compare" className="mt-3">
+                    <div className="space-y-4 max-h-[500px] overflow-auto">
+                      {screenplay.chapters.map((ch) => {
+                        const original = chapters.find((c) => c.number === ch.chapter_number);
+                        return (
+                          <div key={ch.chapter_number} className="rounded-lg border border-border overflow-hidden">
+                            <div className="bg-muted/50 px-3 py-2 font-medium text-sm border-b border-border">{ch.chapter_title}</div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+                              <div className="p-3">
+                                <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider">原文</p>
+                                <p className="text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">{original?.content || "无原文"}</p>
+                              </div>
+                              <div className="p-3">
+                                <p className="text-[10px] text-muted-foreground mb-1.5 uppercase tracking-wider">剧本</p>
+                                <div className="space-y-2">
+                                  {ch.scenes.map((scene) => (
+                                    <div key={scene.scene_id}>
+                                      <p className="text-[10px] text-rose-500 dark:text-rose-400 font-medium">{scene.scene_heading}</p>
+                                      <p className="text-xs mt-0.5">{scene.action}</p>
+                                      {scene.dialogues.map((d) => (
+                                        <p key={d.index} className="text-xs mt-0.5"><span className="font-semibold">{d.speaker}：</span>{d.text}</p>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </TabsContent>
                   <TabsContent value="yaml" className="mt-3 relative">
