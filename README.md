@@ -6,7 +6,7 @@
 
 ## 在线演示
 
-🔗 **[点击体验](https://ai-novel-to-screenplay.vercel.app)**
+🔗 **[点击体验](https://aiscreenplay.yingzhu.xyz)**
 
 ## 功能特点
 
@@ -205,7 +205,7 @@ MIT
 
 ### Live Demo
 
-🔗 **[Try it now](https://ai-novel-to-screenplay.vercel.app)**
+🔗 **[Try it now](https://aiscreenplay.yingzhu.xyz)**
 
 ### Features
 
