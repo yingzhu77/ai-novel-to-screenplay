@@ -1,11 +1,23 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { NovelInput } from "@/components/novel-input";
-import { ChapterList, type ChapterItem } from "@/components/chapter-list";
-import { ScreenplayViewer } from "@/components/screenplay-viewer";
+import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Upload, FileText, Play, Loader2, CheckCircle2, AlertCircle, Download, Copy, Check, Sparkles } from "lucide-react";
 import type { Screenplay, Character, ChapterScreenplay } from "@/lib/schema";
-import { Separator } from "@/components/ui/separator";
+import yaml from "js-yaml";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
+interface ChapterItem {
+  number: number;
+  title: string;
+  content: string;
+  status: "pending" | "converting" | "done" | "error";
+  error?: string;
+}
 
 export default function Home() {
   const [novelText, setNovelText] = useState("");
@@ -14,36 +26,34 @@ export default function Home() {
   const [isParsing, setIsParsing] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
   const [screenplay, setScreenplay] = useState<Screenplay | null>(null);
-  const [existingCharacters, setExistingCharacters] = useState<Character[]>([]);
+  const [copied, setCopied] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".txt")) { alert("目前仅支持 .txt 文件"); return; }
+    const text = await file.text();
+    setNovelText(text);
+  };
 
   const handleParse = useCallback(async () => {
     if (!novelText.trim()) return;
     setIsParsing(true);
-
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: novelText }),
       });
-
       const data = await res.json();
-      if (!data.success) {
-        alert(`解析失败: ${data.error}`);
-        return;
-      }
-
+      if (!data.success) { alert(`解析失败: ${data.error}`); return; }
       const parsed: ChapterItem[] = data.data.chapters.map(
-        (c: { number: number; title: string; content: string }) => ({
-          ...c,
-          status: "pending" as const,
-        })
+        (c: { number: number; title: string; content: string }) => ({ ...c, status: "pending" as const })
       );
-
       setChapters(parsed);
       setSelectedChapters(new Set(parsed.map((c: ChapterItem) => c.number)));
       setScreenplay(null);
-      setExistingCharacters([]);
     } catch (err) {
       alert(`解析出错: ${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
@@ -54,161 +64,237 @@ export default function Home() {
   const handleToggleChapter = useCallback((number: number) => {
     setSelectedChapters((prev) => {
       const next = new Set(prev);
-      if (next.has(number)) {
-        next.delete(number);
-      } else {
-        next.add(number);
-      }
+      if (next.has(number)) next.delete(number); else next.add(number);
       return next;
     });
   }, []);
 
   const handleToggleAll = useCallback(() => {
-    setSelectedChapters((prev) => {
-      if (prev.size === chapters.length) {
-        return new Set();
-      }
-      return new Set(chapters.map((c) => c.number));
-    });
+    setSelectedChapters((prev) => prev.size === chapters.length ? new Set() : new Set(chapters.map((c) => c.number)));
   }, [chapters]);
 
   const handleConvert = useCallback(async () => {
-    const toConvert = chapters.filter(
-      (c) => selectedChapters.has(c.number) && c.status !== "done"
-    );
-
+    const toConvert = chapters.filter((c) => selectedChapters.has(c.number) && c.status !== "done");
     if (toConvert.length === 0) return;
     setIsConverting(true);
-
     const allScenes: ChapterScreenplay[] = [];
-    const allCharacters = [...existingCharacters];
-    const novelTitle = "Novel";
+    const allCharacters: Character[] = [];
 
     for (const chapter of toConvert) {
-      // Mark as converting
-      setChapters((prev) =>
-        prev.map((c) =>
-          c.number === chapter.number ? { ...c, status: "converting" as const } : c
-        )
-      );
-
+      setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
       try {
         const res = await fetch("/api/convert", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            chapterNumber: chapter.number,
-            chapterTitle: chapter.title,
-            chapterContent: chapter.content,
-            existingCharacters: allCharacters,
-          }),
+          body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
         });
-
         const data = await res.json();
-
         if (!data.success) {
-          setChapters((prev) =>
-            prev.map((c) =>
-              c.number === chapter.number
-                ? { ...c, status: "error" as const, error: data.error }
-                : c
-            )
-          );
+          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: data.error } : c));
           continue;
         }
-
-        const chapterData = data.data as ChapterScreenplay & {
-          new_characters?: Character[];
-        };
-
-        allScenes.push(chapterData);
-
-        // Mark as done
-        setChapters((prev) =>
-          prev.map((c) =>
-            c.number === chapter.number ? { ...c, status: "done" as const } : c
-          )
-        );
+        allScenes.push(data.data as ChapterScreenplay);
+        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
       } catch (err) {
-        setChapters((prev) =>
-          prev.map((c) =>
-            c.number === chapter.number
-              ? {
-                  ...c,
-                  status: "error" as const,
-                  error: err instanceof Error ? err.message : "未知错误",
-                }
-              : c
-          )
-        );
+        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: err instanceof Error ? err.message : "未知错误" } : c));
       }
     }
-
-    // Build final screenplay
     if (allScenes.length > 0) {
-      const finalScreenplay: Screenplay = {
-        meta: {
-          screenplay_title: novelTitle,
-          adaptation_of: novelTitle,
-          author: "AI",
-          draft_version: "1.0",
-          chapters_included: allScenes.map((s) => s.chapter_number),
-          generated_at: new Date().toISOString(),
-        },
+      setScreenplay({
+        meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: allScenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
         characters: allCharacters,
         chapters: allScenes,
-      };
-
-      setScreenplay(finalScreenplay);
+      });
     }
-
     setIsConverting(false);
-  }, [chapters, selectedChapters, existingCharacters]);
+  }, [chapters, selectedChapters]);
+
+  const handleDownload = (format: "yaml" | "json") => {
+    if (!screenplay) return;
+    const content = format === "yaml" ? yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true }) : JSON.stringify(screenplay, null, 2);
+    const blob = new Blob([content], { type: format === "yaml" ? "text/yaml" : "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `screenplay.${format}`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const doneCount = chapters.filter((c) => c.status === "done").length;
+  const convertingCount = chapters.filter((c) => c.status === "converting").length;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold">AI Novel to Screenplay</h1>
-          <p className="text-muted-foreground mt-1">
-            将小说文本自动转换为结构化剧本（YAML 格式）
-          </p>
+    <div className="min-h-screen flex flex-col bg-[#f7f7f7]">
+      {/* Nav */}
+      <nav className="bg-white border-b border-gray-100">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-5 text-rose-500" />
+            <span className="font-bold text-lg">AI Screenwriter</span>
+          </div>
+          <span className="text-xs text-muted-foreground">七牛云 × XEngineer</span>
         </div>
-      </header>
+      </nav>
 
-      <main className="container mx-auto px-4 py-8 space-y-8">
-        <NovelInput
-          value={novelText}
-          onChange={setNovelText}
-          onParse={handleParse}
-          isParsing={isParsing}
-        />
+      {/* Hero / Input Section */}
+      <main className="flex-1">
+        <div className="max-w-3xl mx-auto px-4 pt-16 pb-12 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">小说转剧本</h1>
+          <p className="text-lg text-gray-500 mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
 
-        {chapters.length > 0 && (
-          <>
-            <Separator />
-            <ChapterList
-              chapters={chapters}
-              selectedChapters={selectedChapters}
-              onToggleChapter={handleToggleChapter}
-              onToggleAll={handleToggleAll}
-              onConvert={handleConvert}
-              isConverting={isConverting}
+          {/* Textarea */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <Textarea
+              placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
+              className="min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-gray-300"
+              value={novelText}
+              onChange={(e) => setNovelText(e.target.value)}
             />
-          </>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <input ref={fileInputRef} type="file" accept=".txt" onChange={handleFileUpload} className="hidden" />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer"
+            >
+              <Upload className="size-5" />
+              选择小说文件
+            </button>
+            <button
+              onClick={handleParse}
+              disabled={!novelText.trim() || isParsing}
+              className="inline-flex items-center justify-center gap-2 h-14 px-10 rounded-full bg-gray-900 hover:bg-gray-800 text-white text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <FileText className="size-5" />
+              {isParsing ? "解析中..." : "解析章节"}
+            </button>
+          </div>
+          <p className="text-sm text-gray-400 mt-4">或者把 .txt 文件拖动到这里</p>
+        </div>
+
+        {/* Chapter List - appears after parsing */}
+        {chapters.length > 0 && (
+          <div className="max-w-3xl mx-auto px-4 pb-8">
+            <Card className="border-gray-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <div>
+                  <CardTitle className="text-base">
+                    章节列表
+                    <Badge variant="secondary" className="ml-2 text-xs">{chapters.length} 章</Badge>
+                  </CardTitle>
+                  {doneCount > 0 && <p className="text-xs text-muted-foreground mt-0.5">{doneCount} 已完成{convertingCount > 0 ? ` · ${convertingCount} 转换中` : ""}</p>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleToggleAll} className="text-xs">
+                    {selectedChapters.size === chapters.length ? "取消全选" : "全选"}
+                  </Button>
+                  <Button onClick={handleConvert} disabled={selectedChapters.size === 0 || isConverting} size="sm" className="bg-rose-500 hover:bg-rose-600 text-white">
+                    {isConverting ? <Loader2 className="mr-1 size-3 animate-spin" /> : <Play className="mr-1 size-3" />}
+                    转换 ({selectedChapters.size})
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
+                  {chapters.map((chapter) => (
+                    <div key={chapter.number} className="flex items-center gap-2.5 rounded-lg border border-gray-100 p-2.5 hover:bg-gray-50 transition-colors">
+                      <Checkbox checked={selectedChapters.has(chapter.number)} onCheckedChange={() => handleToggleChapter(chapter.number)} disabled={chapter.status === "converting"} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm truncate">{chapter.title}</span>
+                          {chapter.status === "pending" && <Badge variant="outline" className="text-[10px] px-1.5">待转换</Badge>}
+                          {chapter.status === "converting" && <Badge variant="secondary" className="text-[10px] px-1.5"><Loader2 className="mr-0.5 size-2 animate-spin" />转换中</Badge>}
+                          {chapter.status === "done" && <Badge className="text-[10px] px-1.5 bg-green-500"><CheckCircle2 className="mr-0.5 size-2" />完成</Badge>}
+                          {chapter.status === "error" && <Badge variant="destructive" className="text-[10px] px-1.5"><AlertCircle className="mr-0.5 size-2" />失败</Badge>}
+                        </div>
+                      </div>
+                      {chapter.status === "error" && chapter.error && <p className="text-[10px] text-destructive max-w-[160px] truncate">{chapter.error}</p>}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
+        {/* Screenplay Output */}
         {screenplay && (
-          <>
-            <Separator />
-            <ScreenplayViewer screenplay={screenplay} />
-          </>
+          <div className="max-w-3xl mx-auto px-4 pb-16">
+            <Card className="border-gray-200 shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-base">剧本输出</CardTitle>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleDownload("yaml")} className="text-xs">
+                    <Download className="mr-1 size-3" />YAML
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => handleDownload("json")} className="text-xs">
+                    <Download className="mr-1 size-3" />JSON
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="preview">
+                  <TabsList className="h-8">
+                    <TabsTrigger value="preview" className="text-xs">预览</TabsTrigger>
+                    <TabsTrigger value="yaml" className="text-xs">YAML</TabsTrigger>
+                    <TabsTrigger value="json" className="text-xs">JSON</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="preview" className="mt-3">
+                    <div className="space-y-3 max-h-[400px] overflow-auto">
+                      <div className="rounded-lg bg-gray-50 p-3">
+                        <h3 className="font-semibold text-sm mb-1.5">角色</h3>
+                        <div className="flex flex-wrap gap-1.5">
+                          {screenplay.characters.map((c) => (
+                            <span key={c.id} className="inline-flex items-center rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs">{c.name} <span className="ml-1 text-gray-400">{c.role}</span></span>
+                          ))}
+                          {screenplay.characters.length === 0 && <span className="text-xs text-gray-400">暂无角色</span>}
+                        </div>
+                      </div>
+                      {screenplay.chapters.map((ch) => (
+                        <div key={ch.chapter_number} className="rounded-lg bg-gray-50 p-3">
+                          <h3 className="font-semibold text-sm mb-2">{ch.chapter_title}</h3>
+                          {ch.scenes.map((scene) => (
+                            <div key={scene.scene_id} className="ml-3 mb-2 border-l-2 border-gray-200 pl-3">
+                              <p className="text-xs text-gray-500">{scene.scene_heading}</p>
+                              <p className="text-sm mt-0.5">{scene.action}</p>
+                              {scene.dialogues.map((d) => (
+                                <p key={d.index} className="text-sm mt-0.5"><span className="font-semibold">{d.speaker}：</span>{d.emotion && <span className="text-gray-400">（{d.emotion}）</span>}{d.text}</p>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="yaml" className="mt-3 relative">
+                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" onClick={() => handleCopy(yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true }))}>
+                      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    </Button>
+                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-gray-50 p-3 text-xs font-mono">{yaml.dump(screenplay, { indent: 2, lineWidth: 120, noRefs: true })}</pre>
+                  </TabsContent>
+                  <TabsContent value="json" className="mt-3 relative">
+                    <Button variant="ghost" size="icon-sm" className="absolute top-2 right-2" onClick={() => handleCopy(JSON.stringify(screenplay, null, 2))}>
+                      {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
+                    </Button>
+                    <pre className="max-h-[400px] overflow-auto rounded-lg bg-gray-50 p-3 text-xs font-mono">{JSON.stringify(screenplay, null, 2)}</pre>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </main>
 
-      <footer className="border-t mt-auto">
-        <div className="container mx-auto px-4 py-4 text-center text-sm text-muted-foreground">
-          AI Novel to Screenplay — 七牛云 × XEngineer 暑期实训营
+      {/* Footer */}
+      <footer className="border-t border-gray-100 bg-white py-4">
+        <div className="text-center text-xs text-gray-400">
+          AI Screenwriter 2026 · Powered by DeepSeek V4 Flash & Qiniu Cloud
         </div>
       </footer>
     </div>

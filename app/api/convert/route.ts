@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     );
 
     if (!result.success) {
+      console.error("LLM conversion failed:", result.error);
       return Response.json(
         { success: false, error: result.error },
         { status: 500 }
