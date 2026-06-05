@@ -131,11 +131,21 @@ export async function convertChapterToScreenplay(
       }
     }
 
-    // Validate chapter screenplay (remove characters from parsed before validation)
-    const chapterData = { ...parsed };
+    // Normalize LLM response: handle common variations
+    // Some models wrap in { chapters: [...] } or include { meta: {...} }
+    let chapterData: Record<string, unknown> = { ...parsed };
     delete chapterData.characters;
+    delete chapterData.meta;
+    if (Array.isArray(chapterData.chapters) && chapterData.chapters.length > 0) {
+      chapterData = chapterData.chapters[0] as Record<string, unknown>;
+    }
+    delete chapterData.characters;
+
     const result = ChapterScreenplaySchema.safeParse(chapterData);
     if (!result.success) {
+      console.error("Schema validation error:", result.error.message);
+      console.error("LLM response keys:", Object.keys(parsed));
+      console.error("Normalized chapter keys:", Object.keys(chapterData));
       return {
         success: false,
         error: `Schema validation failed: ${result.error.message}`,
