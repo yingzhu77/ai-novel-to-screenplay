@@ -58,6 +58,7 @@ export default function Home() {
   const [isSaving, setIsSaving] = useState(false);
   const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [viewMode, setViewMode] = useState<"input" | "result">("input");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -90,6 +91,7 @@ export default function Home() {
       setChapters(parsed);
       setSelectedChapters(new Set(parsed.map((c: ChapterItem) => c.number)));
       setScreenplay(null);
+      setViewMode("result");
       // Warn about long chapters (threshold: ~3000 tokens ≈ 6000 chars)
       const longChapters = parsed.filter((c) => c.content.length > 6000);
       if (longChapters.length > 0) {
@@ -249,6 +251,7 @@ export default function Home() {
 
       {/* Hero / Input Section */}
       <main className="flex-1">
+        {viewMode === "input" ? (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center">
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">小说转剧本</h1>
           <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
@@ -284,9 +287,20 @@ export default function Home() {
           </div>
           <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt / .md 文件拖动到这里</p>
         </div>
+        ) : (
+        /* Result View */
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-8">
+          <button
+            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); }}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            ← 返回上传
+          </button>
+        </div>
+        )}
 
-        {/* Conversion Progress */}
-        {convertProgress.total > 0 && (
+        {/* Conversion Progress - only in result mode */}
+        {viewMode === "result" && convertProgress.total > 0 && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
             <div className="rounded-xl bg-card border border-border p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -316,7 +330,7 @@ export default function Home() {
         )}
 
         {/* Chapter List */}
-        {chapters.length > 0 && (
+        {viewMode === "result" && chapters.length > 0 && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8">
             <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -368,7 +382,7 @@ export default function Home() {
         )}
 
         {/* Screenplay Output */}
-        {screenplay && (
+        {viewMode === "result" && screenplay && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
             <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -495,7 +509,7 @@ export default function Home() {
       </main>
 
       {/* History */}
-      {history.length > 0 && !screenplay && (
+      {viewMode === "input" && history.length > 0 && !screenplay && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8 w-full">
           <h3 className="text-sm font-medium text-muted-foreground mb-3">最近转换</h3>
           <div className="space-y-2">
