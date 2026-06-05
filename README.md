@@ -1,6 +1,6 @@
 # AI Novel to Screenplay
 
-> 将小说文本自动转换为结构化剧本（YAML 格式）— 七牛云 × XEngineer 暑期实训营参赛作品
+> 将小说文本自动转换为结构化剧本（YAML 格式）
 
 [English](#english) | **中文**
 
@@ -10,32 +10,36 @@
 
 ## 功能特点
 
-- **智能章节识别** — 支持中文（第X章/节/回）和英文（Chapter X）格式
-- **AI 剧本转换** — DeepSeek V4 Flash 模型，自动识别场景、对话、情绪
-- **结构化输出** — 符合自定义 YAML Schema，支持 YAML/JSON 双格式下载
-- **存算分离架构** — 七牛云 Kodo S3 存储 + DeepSeek LLM 计算
-- **免费使用** — 七牛 AI Token API 提供 300 万免费 Token
+- **智能章节识别** — 支持中文（第X章/节/回）、英文（Chapter X）、Markdown 标题格式
+- **多格式输入** — 支持 .txt、.md、.docx 文件上传，可多文件同时处理
+- **AI 剧本转换** — DeepSeek V4 Flash 模型，自动识别场景、对话、情绪、角色
+- **实时进度** — SSE 流式传输，逐章显示转换进度
+- **角色关系图** — 可视化角色之间的关系网络
+- **原文对比** — 并排查看小说原文与转换后的剧本
+- **结构化输出** — 自定义 YAML Schema，支持 YAML/JSON 双格式下载
+- **云端存储** — 自动保存到对象存储，24 小时内可重复下载
+- **深色模式** — 支持亮色/暗色主题切换
+- **响应式设计** — 适配桌面端和移动端
 
 ## 技术架构
 
 ```
 ┌─────────────────────────────────────────────────┐
 │                   Frontend                       │
-│            Next.js + Tailwind CSS               │
-│         粘贴小说 / 上传 .txt 文件                 │
+│      Next.js 16 + React 19 + Tailwind CSS       │
+│         粘贴小说 / 上传文件 / 拖拽上传            │
 └──────────────────────┬──────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────┐
-│                 API Routes                       │
-│  /api/parse    — 章节拆分                        │
-│  /api/convert  — LLM 转换（七牛 AI Token API）    │
-│  /api/storage  — 文件存储（七牛 Kodo S3）         │
+│                 API Routes (SSE)                 │
+│  /api/parse       — 章节拆分                     │
+│  /api/convert-stream — 流式 LLM 转换             │
+│  /api/storage     — 云端存储                      │
 └───────┬──────────────┬──────────────────────────┘
         │              │
 ┌───────▼──────┐ ┌─────▼────────────┐
-│ DeepSeek V4  │ │   Qiniu Kodo     │
-│   Flash      │ │   S3 Storage     │
-│ (via 七牛)   │ │ (签名 URL 下载)   │
+│ DeepSeek V4  │ │   对象存储        │
+│   Flash      │ │  (S3 协议)       │
 └──────────────┘ └──────────────────┘
 ```
 
@@ -45,9 +49,10 @@
 |------|------|
 | 前端 | Next.js 16 (App Router) + React 19 + TypeScript |
 | UI | Tailwind CSS 4 + shadcn/ui |
-| LLM | DeepSeek V4 Flash（七牛 AI Token API） |
-| 存储 | 七牛云 Kodo（S3 兼容协议） |
+| LLM | DeepSeek V4 Flash（OpenAI 兼容 API） |
+| 存储 | S3 兼容协议（签名 URL 下载） |
 | Schema | Zod 验证 + 自定义 YAML Schema |
+| 流式传输 | Server-Sent Events (POST + ReadableStream) |
 | 测试 | Vitest（17 个测试用例） |
 
 ## 快速开始
@@ -80,12 +85,12 @@ npm run dev
 ### 环境变量
 
 ```env
-# 七牛 AI Token API（LLM 服务）
-DEEPSEEK_API_KEY=your-qiniu-ai-api-key
-DEEPSEEK_BASE_URL=https://openai.qiniu.com/v1
-DEEPSEEK_MODEL=deepseek/deepseek-v4-flash
+# LLM 服务（OpenAI 兼容 API）
+DEEPSEEK_API_KEY=your-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-v4-flash
 
-# 七牛云 Kodo S3（文件存储）
+# 对象存储（S3 兼容）
 QINIU_ACCESS_KEY=your-access-key
 QINIU_SECRET_KEY=your-secret-key
 QINIU_BUCKET=your-bucket-name
@@ -96,25 +101,11 @@ QINIU_REGION=cn-north-1
 ### 部署到 Vercel
 
 ```bash
-# 安装 Vercel CLI
 npm i -g vercel
-
-# 部署
 vercel
-
-# 配置环境变量（在 Vercel 控制台或通过 CLI）
-vercel env add DEEPSEEK_API_KEY
-# ... 其他环境变量
 ```
 
 ## YAML Schema 设计
-
-### 设计哲学
-
-Schema 采用三层融合设计：
-1. **方案 A — 专业剧本元数据**（meta 层）
-2. **方案 B — AI 可控边界**（scene/dialogue 结构）
-3. **方案 C — 实体建模**（角色独立实体）
 
 ### 核心结构
 
@@ -122,20 +113,17 @@ Schema 采用三层融合设计：
 meta:
   screenplay_title: 剧本标题
   adaptation_of: 改编自哪部小说
-  author: 改编者
   chapters_included: [1, 2, 3]
 
 characters:
   - id: CHAR_1
     name: 角色名
-    aliases: [别名]
-    role: 主角/反派/配角
+    role: 主角/配角
     description: 外貌与身份简介
     traits: [性格特征]
 
 chapters:
   - chapter_number: 1
-    chapter_title: 第一章 标题
     scenes:
       - scene_id: CH1_SC1
         scene_heading: INT. 地点 - 时间
@@ -152,44 +140,32 @@ chapters:
 
 ```
 ├── app/
-│   ├── page.tsx              # 首页
-│   ├── layout.tsx            # 根布局
+│   ├── page.tsx                  # 首页（完整交互流程）
+│   ├── layout.tsx                # 根布局
 │   └── api/
-│       ├── convert/route.ts  # LLM 转换 API
-│       ├── parse/route.ts    # 章节解析 API
-│       └── storage/route.ts  # 文件存储 API
+│       ├── convert/route.ts      # 单章转换 API
+│       ├── convert-stream/route.ts # SSE 流式转换
+│       ├── parse/route.ts        # 章节解析 API
+│       └── storage/route.ts      # 云端存储 API
 ├── lib/
-│   ├── schema.ts             # Zod Schema 定义
-│   ├── splitter.ts           # 章节拆分器
-│   ├── llm.ts                # DeepSeek API 封装
-│   └── qiniu.ts              # 七牛 S3 封装
+│   ├── schema.ts                 # Zod Schema 定义
+│   ├── splitter.ts               # 章节拆分器
+│   ├── llm.ts                    # LLM API 封装
+│   └── qiniu.ts                  # 对象存储封装
 ├── types/
-│   └── screenplay.ts         # TypeScript 类型
+│   └── screenplay.ts             # TypeScript 类型
 ├── docs/
-│   └── yaml-schema-design.md # Schema 设计文档
-└── components/ui/            # shadcn/ui 组件
+│   └── yaml-schema-design.md     # Schema 设计文档
+└── components/ui/                # shadcn/ui 组件
 ```
 
 ## 测试
 
 ```bash
-# 运行所有测试
 npm test
-
-# 查看测试覆盖率
-npx vitest run --coverage
 ```
 
-当前 17 个测试用例，覆盖章节拆分和 LLM 调用。
-
-## 评审标准对齐
-
-| 评审维度 | 我们的方案 |
-|----------|-----------|
-| **功能完整性** | 粘贴/上传 → 拆分 → LLM 转换 → 预览 → 下载 YAML/JSON |
-| **易用性** | 三步完成，零学习成本，ilovepdf 极简风格 |
-| **创新性** | 自定义 YAML Schema、存算分离、角色关系提取 |
-| **技术难度** | 七牛 AI Token API + Kodo S3 双重集成 |
+17 个测试用例覆盖章节拆分和 LLM 调用。
 
 ## License
 
@@ -209,17 +185,24 @@ MIT
 
 ### Features
 
-- **Smart chapter detection** — Supports Chinese (第X章/节/回) and English (Chapter X) formats
-- **AI screenplay conversion** — DeepSeek V4 Flash model, auto-detects scenes, dialogues, and emotions
-- **Structured output** — Custom YAML Schema, supports YAML/JSON download
-- **Cloud-native architecture** — Qiniu Kodo S3 storage + DeepSeek LLM via Qiniu AI Token API
+- **Smart chapter detection** — Chinese (第X章/节/回), English (Chapter X), Markdown headers
+- **Multi-format input** — .txt, .md, .docx file upload with multi-file support
+- **AI conversion** — DeepSeek V4 Flash, auto-detects scenes, dialogues, emotions, characters
+- **Real-time progress** — SSE streaming shows per-chapter conversion status
+- **Character relationship graph** — Visual relationship network
+- **Comparison view** — Side-by-side novel text vs screenplay
+- **Structured output** — YAML/JSON download with custom Schema
+- **Cloud storage** — Auto-save with 24h signed download URLs
+- **Dark mode** — Light/dark theme toggle
+- **Responsive** — Desktop and mobile optimized
 
 ### Tech Stack
 
-- **Frontend**: Next.js 16 (App Router) + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui
-- **LLM**: DeepSeek V4 Flash (via Qiniu AI Token API, 3M free tokens)
-- **Storage**: Qiniu Kodo (S3-compatible protocol, signed URL download)
+- **Frontend**: Next.js 16 + React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui
+- **LLM**: DeepSeek V4 Flash (OpenAI-compatible API)
+- **Storage**: S3-compatible object storage (signed URL)
 - **Schema**: Zod validation + custom YAML Schema
+- **Streaming**: Server-Sent Events (POST + ReadableStream)
 
 ### Quick Start
 
@@ -234,17 +217,11 @@ npm run dev
 
 ### How It Works
 
-1. Paste novel text or upload a .txt file
+1. Paste novel text or upload .txt/.md/.docx files
 2. AI detects and splits chapters automatically
-3. Each chapter is converted to a structured screenplay scene
-4. Preview the result and download as YAML or JSON
-
-### Architecture
-
-```
-User → Next.js Frontend → API Routes → DeepSeek V4 Flash (via Qiniu AI)
-                                    → Qiniu Kodo S3 (file storage)
-```
+3. Each chapter is converted to a structured screenplay scene (SSE streaming)
+4. Preview the result, view character relationships, compare with original
+5. Download as YAML or JSON, or save to cloud storage
 
 ### License
 
