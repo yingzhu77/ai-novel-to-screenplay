@@ -1,6 +1,6 @@
 # 剧本 YAML Schema 设计文档
 
-> 七牛云 × XEngineer 暑期实训营 — AI 小说转剧本工具
+> AI 小说转剧本工具 — 结构化剧本输出的 Schema 设计
 
 ---
 
@@ -150,7 +150,90 @@ character:
 
 ---
 
-## 五、Schema 的可扩展性
+## 五、实际输出示例
+
+以下是 DeepSeek V4 Flash 对一段小说原文的真实转换结果：
+
+### 原文
+
+> 清晨的阳光洒在青石板路上，年轻的剑客张三背着一把长剑走进了望月镇。他走进了一家客栈，角落里坐着独眼的中年男人李四，正在喝酒。张三走到柜台前，对掌柜王老头说："老板，来一壶酒。"
+
+### 转换输出
+
+```json
+{
+  "chapter_number": 1,
+  "chapter_title": "第一章 初入江湖",
+  "scene_count": 1,
+  "characters": [
+    {
+      "id": "CHAR_1",
+      "name": "张三",
+      "aliases": [],
+      "role": "主角",
+      "description": "年轻的剑客，背着一把长剑",
+      "traits": ["坚定", "清秀"]
+    },
+    {
+      "id": "CHAR_2",
+      "name": "李四",
+      "aliases": [],
+      "role": "配角",
+      "description": "独眼的中年男人，脸上有刀疤",
+      "traits": ["冷峻", "神秘"]
+    },
+    {
+      "id": "CHAR_3",
+      "name": "王老头",
+      "aliases": [],
+      "role": "配角",
+      "description": "客栈掌柜",
+      "traits": ["和蔼"]
+    }
+  ],
+  "scenes": [
+    {
+      "scene_id": "CH1_SC1",
+      "scene_heading": "EXT. 望月镇街道 - 清晨",
+      "location": "望月镇街道",
+      "time": "清晨",
+      "characters_present": ["张三", "李四", "王老头"],
+      "action": "清晨，阳光洒在青石板路上。年轻的剑客张三背着一把长剑走进望月镇。他走进一家客栈，角落里坐着独眼中年男人李四，正在喝酒。张三走到柜台前。",
+      "dialogues": [
+        {
+          "index": 1,
+          "speaker": "张三",
+          "to": "王老头",
+          "text": "老板，来一壶酒。",
+          "emotion": "平静",
+          "action": "对掌柜说"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 验证方式
+
+该输出经过 Zod Schema 严格验证：
+
+```typescript
+import { ScreenplaySchema } from "@/lib/schema";
+
+const result = ScreenplaySchema.safeParse({
+  meta: { screenplay_title: "...", adaptation_of: "...", author: "AI", draft_version: "1.0", chapters_included: [1], generated_at: "..." },
+  characters: [...],
+  chapters: [...]
+});
+// result.success === true
+```
+
+测试覆盖：17 个单元测试确保 Schema 验证、章节拆分、LLM 调用的正确性。
+
+---
+
+## 六、可扩展性
 
 当前 Schema 为本次 3 天开发的最小可用版本。预留了未来扩展空间：
 
@@ -164,7 +247,7 @@ character:
 
 ---
 
-## 六、设计决策速查表
+## 七、设计决策速查表
 
 | 决策 | 方案 | 为什么 |
 |------|------|--------|
