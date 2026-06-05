@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       );
     }
 
-    return Response.json({ success: true, data: result.data });
+    return Response.json({ success: true, data: result.data, characters: result.characters });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(

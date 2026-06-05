@@ -94,6 +94,14 @@ export default function Home() {
           continue;
         }
         allScenes.push(data.data as ChapterScreenplay);
+        // Collect new characters, deduplicate by name
+        if (Array.isArray(data.characters)) {
+          for (const char of data.characters) {
+            if (!allCharacters.some((c) => c.name === char.name)) {
+              allCharacters.push(char);
+            }
+          }
+        }
         setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
       } catch (err) {
         setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: err instanceof Error ? err.message : "未知错误" } : c));
@@ -248,10 +256,21 @@ export default function Home() {
                   <TabsContent value="preview" className="mt-3">
                     <div className="space-y-3 max-h-[400px] overflow-auto">
                       <div className="rounded-lg bg-gray-50 p-3">
-                        <h3 className="font-semibold text-sm mb-1.5">角色</h3>
-                        <div className="flex flex-wrap gap-1.5">
+                        <h3 className="font-semibold text-sm mb-2">角色 ({screenplay.characters.length})</h3>
+                        <div className="space-y-2">
                           {screenplay.characters.map((c) => (
-                            <span key={c.id} className="inline-flex items-center rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs">{c.name} <span className="ml-1 text-gray-400">{c.role}</span></span>
+                            <div key={c.id} className="flex items-start gap-2 bg-white rounded-lg border border-gray-100 p-2">
+                              <span className="inline-flex items-center rounded-full bg-rose-50 text-rose-600 px-2 py-0.5 text-xs font-medium shrink-0">{c.role}</span>
+                              <div className="min-w-0">
+                                <span className="font-medium text-sm">{c.name}</span>
+                                {c.description && <span className="text-xs text-gray-500 ml-2">{c.description}</span>}
+                                {c.traits.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {c.traits.map((t) => <span key={t} className="text-[10px] text-gray-400 bg-gray-100 rounded px-1">{t}</span>)}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           ))}
                           {screenplay.characters.length === 0 && <span className="text-xs text-gray-400">暂无角色</span>}
                         </div>
