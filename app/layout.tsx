@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AI Novel to Screenplay",
   description: "AI-powered tool to convert novels into structured screenplays (YAML format)",
+  icons: { icon: "/logo.webp" },
 };
 
 export default function RootLayout({
