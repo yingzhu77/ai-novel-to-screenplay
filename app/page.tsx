@@ -56,6 +56,7 @@ export default function Home() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [cloudConsent, setCloudConsent] = useState(false);
   const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [viewMode, setViewMode] = useState<"input" | "result">("input");
@@ -206,27 +207,14 @@ export default function Home() {
                 };
                 setScreenplay(finalScreenplay);
 
-                setIsSaving(true);
-                setCloudUrl(null);
-                try {
-                  const storageRes = await fetch("/api/storage", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
-                  });
-                  const storageData = await storageRes.json();
-                  if (storageData.success && storageData.data?.downloadUrl) {
-                    setCloudUrl(storageData.data.downloadUrl);
-                    const historyItem: HistoryItem = {
-                      id: `${Date.now()}`, title: finalScreenplay.meta.screenplay_title,
-                      chapterCount: finalScreenplay.chapters.length, characterCount: finalScreenplay.characters.length,
-                      cloudUrl: storageData.data.downloadUrl, createdAt: new Date().toISOString(),
-                    };
-                    saveHistory(historyItem);
-                    setHistory(loadHistory());
-                  }
-                } catch { /* Storage failure is non-blocking */ }
-                finally { setIsSaving(false); }
+                // Save to local history (without cloud URL)
+                const historyItem: HistoryItem = {
+                  id: `${Date.now()}`, title: finalScreenplay.meta.screenplay_title,
+                  chapterCount: finalScreenplay.chapters.length, characterCount: finalScreenplay.characters.length,
+                  cloudUrl: null, createdAt: new Date().toISOString(),
+                };
+                saveHistory(historyItem);
+                setHistory(loadHistory());
               }
             }
           }
@@ -241,6 +229,31 @@ export default function Home() {
       setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
     }
   }, [chapters, selectedChapters]);
+
+  const handleCloudSave = useCallback(async () => {
+    if (!screenplay || !cloudConsent) return;
+    setIsSaving(true);
+    setCloudUrl(null);
+    try {
+      const storageRes = await fetch("/api/storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ screenplay, format: "yaml" }),
+      });
+      const storageData = await storageRes.json();
+      if (storageData.success && storageData.data?.downloadUrl) {
+        setCloudUrl(storageData.data.downloadUrl);
+        // Update history with cloud URL
+        const history = loadHistory();
+        if (history.length > 0) {
+          history[0].cloudUrl = storageData.data.downloadUrl;
+          localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+          setHistory(loadHistory());
+        }
+      }
+    } catch { /* Storage failure is non-blocking */ }
+    finally { setIsSaving(false); }
+  }, [screenplay, cloudConsent]);
 
   const handleDownload = (format: "yaml" | "json") => {
     if (!screenplay) return;
@@ -359,7 +372,7 @@ export default function Home() {
         /* Result View */
         <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-8">
           <button
-            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); setUploadedFiles([]); setNovelText(""); }}
+            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setCloudConsent(false); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); setUploadedFiles([]); setNovelText(""); }}
             className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
           >
             ← 返回上传
@@ -464,21 +477,41 @@ export default function Home() {
                   </Button>
                 </div>
               </CardHeader>
-              {(isSaving || cloudUrl) && (
-                <div className="px-4 pb-3">
-                  {isSaving && (
-                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <Loader2 className="size-3 animate-spin" /> 正在保存到七牛云...
-                    </p>
-                  )}
-                  {cloudUrl && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="text-green-600 dark:text-green-400">已保存到云端</span>
-                      <a href={cloudUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[300px]">云端下载链接</a>
+              {/* Cloud Save Section */}
+              <div className="px-4 pb-3 border-b border-border mb-3">
+                {cloudUrl ? (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-green-600 dark:text-green-400">已保存到云端</span>
+                    <a href={cloudUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline truncate max-w-[300px]">云端下载链接</a>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="cloud-consent"
+                        checked={cloudConsent}
+                        onCheckedChange={(checked) => setCloudConsent(checked === true)}
+                        className="mt-0.5 h-4 w-4"
+                      />
+                      <label htmlFor="cloud-consent" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                        我已了解并同意：保存到云端意味着我的内容将存储在<strong className="text-foreground">共享存储桶</strong>中，
+                        虽然有签名 URL 保护，但<strong className="text-amber-600 dark:text-amber-400">仍存在数据泄露风险</strong>。
+                        建议仅保存非敏感内容。
+                      </label>
                     </div>
-                  )}
-                </div>
-              )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCloudSave}
+                      disabled={!cloudConsent || isSaving}
+                      className="text-xs h-8"
+                    >
+                      {isSaving ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
+                      保存到云端获取下载链接
+                    </Button>
+                  </div>
+                )}
+              </div>
               <CardContent>
                 <Tabs defaultValue="preview">
                   <TabsList className="h-9">
