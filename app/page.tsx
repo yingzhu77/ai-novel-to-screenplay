@@ -61,9 +61,6 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [viewMode, setViewMode] = useState<"input" | "result">("input");
   const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: number; chapters: number }[]>([]);
-  const [showTokenModal, setShowTokenModal] = useState(false);
-  const [tokenUsage, setTokenUsage] = useState<{ input: number; output: number; date: string } | null>(null);
-  const [isLoadingToken, setIsLoadingToken] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
@@ -284,24 +281,6 @@ export default function Home() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const fetchTokenUsage = useCallback(async () => {
-    setIsLoadingToken(true);
-    try {
-      const today = new Date();
-      const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
-      const end = today.toISOString().split("T")[0];
-      const res = await fetch(`/api/token-usage?start=${start}&end=${end}`);
-      const data = await res.json();
-      if (data.success) {
-        setTokenUsage(data.data);
-      }
-    } catch {
-      setTokenUsage(null);
-    } finally {
-      setIsLoadingToken(false);
-    }
-  }, []);
-
   const doneCount = chapters.filter((c) => c.status === "done").length;
   const convertingCount = chapters.filter((c) => c.status === "converting").length;
 
@@ -316,17 +295,6 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted-foreground hidden sm:inline">从小说到剧本，一键转换</span>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => { setShowTokenModal(true); fetchTokenUsage(); }}
-              aria-label="查看 Token 用量"
-              className="h-11 w-11"
-            >
-              <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-              </svg>
-            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -758,50 +726,6 @@ export default function Home() {
           AI Screenwriter 2026 · Powered by DeepSeek V4 Flash & Qiniu Cloud
         </div>
       </footer>
-
-      {/* Token Usage Modal */}
-      {showTokenModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowTokenModal(false)}>
-          <div className="bg-card rounded-lg border border-border p-6 w-full max-w-sm mx-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Token 用量统计</h3>
-              <button onClick={() => setShowTokenModal(false)} className="text-muted-foreground hover:text-foreground">
-                <svg className="size-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            {tokenUsage ? (
-              <div className="space-y-3">
-                <p className="text-xs text-muted-foreground">日期：{tokenUsage.date}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-2xl font-bold text-rose-500">{tokenUsage.input}</p>
-                    <p className="text-xs text-muted-foreground mt-1">输入 Token (k)</p>
-                  </div>
-                  <div className="rounded-lg bg-muted/50 p-3 text-center">
-                    <p className="text-2xl font-bold text-blue-500">{tokenUsage.output}</p>
-                    <p className="text-xs text-muted-foreground mt-1">输出 Token (k)</p>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground text-center">当前模型免费，无 Token 限制，仅限流 (RPM)</p>
-              </div>
-            ) : (
-              <div className="text-center py-4">
-                {isLoadingToken ? (
-                  <Loader2 className="size-6 animate-spin mx-auto text-muted-foreground" />
-                ) : (
-                  <p className="text-sm text-muted-foreground">暂无数据</p>
-                )}
-              </div>
-            )}
-            <Button variant="outline" size="sm" className="w-full mt-4" onClick={fetchTokenUsage} disabled={isLoadingToken}>
-              {isLoadingToken ? <Loader2 className="mr-1 size-3 animate-spin" /> : null}
-              刷新
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
