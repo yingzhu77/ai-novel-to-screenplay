@@ -172,6 +172,7 @@ export default function Home() {
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let eventType = "";
 
       try {
         while (true) {
@@ -182,7 +183,6 @@ export default function Home() {
           const lines = buffer.split("\n");
           buffer = lines.pop() || "";
 
-          let eventType = "";
           for (const line of lines) {
             if (line.startsWith("event: ")) {
               eventType = line.slice(7);
