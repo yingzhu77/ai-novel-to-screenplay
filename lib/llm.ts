@@ -16,15 +16,19 @@ export interface ConvertResult {
 
 const SYSTEM_PROMPT = `小说转剧本JSON。字段名不可改动：
 
-{"chapter_number":1,"chapter_title":"","scene_count":1,"characters":[{"id":"CHAR_1","name":"","aliases":[],"role":"主角/配角","description":"","traits":[]}],"scenes":[{"scene_id":"CH1_SC1","scene_heading":"INT. 地点 - 时间","location":"","time":"","characters_present":[],"action":"舞台指示","dialogues":[{"index":1,"speaker":"","text":"","emotion":"","action":""}]}]}
+{"chapter_number":1,"chapter_title":"","scene_count":1,"characters":[{"id":"CHAR_1","name":"","aliases":[],"role":"主角/反派/配角","description":"","traits":[]}],"scenes":[{"scene_id":"CH1_SC1","scene_heading":"INT. 地点 - 时间","location":"","time":"","characters_present":[],"action":"舞台指示","dialogues":[{"index":1,"speaker":"","text":"","emotion":"","action":""}]}]}
 
 规则：
 1. characters提取所有角色，id格式CHAR_N
-2. scenes按地点/时间/事件变化分割
-3. scene_heading必须INT./EXT.开头
-4. action用present tense改写叙述
-5. dialogues保留原文台词，emotion推断情绪
-6. 只输出JSON。`;
+2. role必须是以下之一：
+   - 主角：故事核心人物，推动剧情发展，读者/观众的视角人物
+   - 反派：与主角对立，制造冲突和阻碍的角色
+   - 配角：辅助主角或推动剧情，但非核心对立面的角色
+3. scenes按地点/时间/事件变化分割
+4. scene_heading必须INT./EXT.开头
+5. action用present tense改写叙述
+6. dialogues保留原文台词，emotion推断情绪
+7. 只输出JSON。`;
 
 function buildUserPrompt(
   chapter: { number: number; title: string; content: string },
