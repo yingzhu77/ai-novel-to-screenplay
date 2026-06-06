@@ -51,6 +51,7 @@ next-env.d.ts
 *.png
 *.jpg
 *.jpeg
+!docs/screenshots/*.png
 
 # Claude Code local settings
 .claude/
