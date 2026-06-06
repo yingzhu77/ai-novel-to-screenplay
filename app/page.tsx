@@ -205,6 +205,79 @@ export default function Home() {
     }
   }, [chapters, selectedChapters]);
 
+  const handleRetry = useCallback(async (chapterNumber: number) => {
+    const chapter = chapters.find((c) => c.number === chapterNumber);
+    if (!chapter || chapter.status !== "error") return;
+
+    setIsConverting(true);
+    setConvertProgress({ current: 0, total: 1, chapterTitle: chapter.title });
+
+    try {
+      const res = await fetch("/api/convert-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapters: [{ number: chapter.number, title: chapter.title, content: chapter.content }],
+          existingCharacters: [],
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Stream request failed: ${res.status}`);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let eventType = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              let data: Record<string, unknown>;
+              try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+              if (eventType === "chapter-start") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "converting" as const } : c));
+              } else if (eventType === "chapter-done") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "done" as const } : c));
+                // Update screenplay with new chapter data
+                if (data.data) {
+                  setScreenplay((prev) => {
+                    if (!prev) return prev;
+                    const newData = data.data as ChapterScreenplay;
+                    const updatedChapters = prev.chapters.map((ch) =>
+                      ch.chapter_number === newData.chapter_number ? newData : ch
+                    );
+                    return { ...prev, chapters: updatedChapters };
+                  });
+                }
+              } else if (eventType === "chapter-error") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "error" as const, error: data.error as string } : c));
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock();
+      }
+    } catch (err) {
+      setChapters((prev) => prev.map((c) => c.number === chapterNumber ? { ...c, status: "error" as const, error: err instanceof Error ? err.message : "Unknown error" } : c));
+    } finally {
+      setIsConverting(false);
+      setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
+    }
+  }, [chapters]);
+
   const handleCloudSave = useCallback(async () => {
     if (!screenplay || !cloudConsent) return;
     setIsSaving(true);
@@ -278,6 +351,7 @@ export default function Home() {
             onToggleChapter={handleToggleChapter}
             onToggleAll={handleToggleAll}
             onConvert={handleConvert}
+            onRetry={handleRetry}
           />
         )}
 

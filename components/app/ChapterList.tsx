@@ -15,6 +15,7 @@ interface ChapterListProps {
   onToggleChapter: (number: number) => void;
   onToggleAll: () => void;
   onConvert: () => void;
+  onRetry: (chapterNumber: number) => void;
 }
 
 export function ChapterList({
@@ -25,6 +26,7 @@ export function ChapterList({
   onToggleChapter,
   onToggleAll,
   onConvert,
+  onRetry,
 }: ChapterListProps) {
   const doneCount = chapters.filter((c) => c.status === "done").length;
   const convertingCount = chapters.filter((c) => c.status === "converting").length;
@@ -68,10 +70,26 @@ export function ChapterList({
                     {chapter.status === "pending" && <Badge variant="outline" className="text-[10px] px-1.5">待转换</Badge>}
                     {chapter.status === "converting" && <Badge variant="secondary" className="text-[10px] px-1.5"><Loader2 className="mr-0.5 size-2 animate-spin" />转换中</Badge>}
                     {chapter.status === "done" && <Badge className="text-[10px] px-1.5 bg-green-500"><CheckCircle2 className="mr-0.5 size-2" />完成</Badge>}
-                    {chapter.status === "error" && <Badge variant="destructive" className="text-[10px] px-1.5"><AlertCircle className="mr-0.5 size-2" />失败</Badge>}
+                    {chapter.status === "error" && (
+                      <>
+                        <Badge variant="destructive" className="text-[10px] px-1.5"><AlertCircle className="mr-0.5 size-2" />失败</Badge>
+                        <button
+                          onClick={() => onRetry(chapter.number)}
+                          className="text-[10px] text-blue-500 hover:text-blue-600 hover:underline"
+                        >
+                          重试
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-                {chapter.status === "error" && chapter.error && <p className="text-[10px] text-destructive max-w-[160px] truncate">{chapter.error}</p>}
+                {chapter.status === "error" && chapter.error && (
+                  <p className={`text-[10px] max-w-[200px] truncate ${chapter.error.includes("429") || chapter.error.includes("rate limit") ? "text-amber-600 dark:text-amber-400" : "text-destructive"}`}>
+                    {chapter.error.includes("429") || chapter.error.includes("rate limit")
+                      ? "请求过于频繁，请稍后重试"
+                      : chapter.error}
+                  </p>
+                )}
               </div>
             ))}
           </div>
