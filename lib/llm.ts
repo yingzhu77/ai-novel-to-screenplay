@@ -20,15 +20,20 @@ const SYSTEM_PROMPT = `小说转剧本JSON。字段名不可改动：
 
 规则：
 1. characters提取所有角色，id格式CHAR_N
-2. role必须是以下之一：
-   - 主角：故事核心人物，推动剧情发展，读者/观众的视角人物
-   - 反派：与主角对立，制造冲突和阻碍的角色
-   - 配角：辅助主角或推动剧情，但非核心对立面的角色
-3. scenes按地点/时间/事件变化分割
-4. scene_heading必须INT./EXT.开头
-5. action用present tense改写叙述
-6. dialogues保留原文台词，emotion推断情绪
-7. 只输出JSON。`;
+2. role判断标准：
+   - 主角：故事围绕其展开，读者代入其视角，经历成长或变化
+   - 反派：有明确的负面行为（如欺骗、背叛、陷害、阻挠），与主角产生直接冲突，被揭露或击败
+   - 配角：没有负面行为，辅助或帮助主角，或只是背景人物
+3. 判断方法：如果角色在故事中有以下行为，应标记为反派：
+   - 对主角撒谎或隐瞒真相
+   - 背叛或出卖主角
+   - 阻挠主角的目标
+   - 最终被揭露或受到惩罚
+4. scenes按地点/时间/事件变化分割
+5. scene_heading必须INT./EXT.开头
+6. action用present tense改写叙述
+7. dialogues保留原文台词，emotion推断情绪
+8. 只输出JSON。`;
 
 function buildUserPrompt(
   chapter: { number: number; title: string; content: string },
