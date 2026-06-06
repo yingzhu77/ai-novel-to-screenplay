@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitChapters, type Chapter } from "../splitter";
+import { splitChapters } from "../splitter";
 
 describe("splitChapters", () => {
   describe("Chinese chapter patterns", () => {

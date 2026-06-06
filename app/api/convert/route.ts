@@ -1,5 +1,4 @@
 import { convertChapterToScreenplay } from "@/lib/llm";
-import { splitChapters } from "@/lib/splitter";
 import type { Character } from "@/lib/schema";
 
 export const maxDuration = 60;
