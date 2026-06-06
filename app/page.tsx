@@ -123,8 +123,11 @@ export default function Home() {
       setViewMode("result");
       // Warn about long chapters (threshold: ~3000 tokens ≈ 6000 chars)
       const longChapters = parsed.filter((c) => c.content.length > 6000);
-      if (longChapters.length > 0) {
-        setWarnings(longChapters.map((c) => `${c.title} 内容较长（${c.content.length} 字），可能影响转换质量`));
+      const veryLongChapters = parsed.filter((c) => c.content.length > 12000);
+      if (veryLongChapters.length > 0) {
+        setWarnings(veryLongChapters.map((c) => `${c.title} 内容过长（${c.content.length} 字），建议拆分为多个章节后再转换，否则可能截断或转换失败`));
+      } else if (longChapters.length > 0) {
+        setWarnings(longChapters.map((c) => `${c.title} 内容较长（${c.content.length} 字），转换时间可能较长，建议拆分`));
       } else {
         setWarnings([]);
       }
@@ -441,7 +444,7 @@ export default function Home() {
               {warnings.length > 0 && (
                 <div className="px-4 pb-3">
                   {warnings.map((w) => (
-                    <p key={w} className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 rounded-md px-3 py-1.5">{w}</p>
+                    <p key={w} className={`text-xs rounded-md px-3 py-1.5 ${w.includes("过长") ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10" : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10"}`}>{w}</p>
                   ))}
                 </div>
               )}
