@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, type ChangeEvent } from "react";
+import { useState, useCallback, useRef, useEffect, type ChangeEvent } from "react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,6 +20,31 @@ interface ChapterItem {
   error?: string;
 }
 
+interface HistoryItem {
+  id: string;
+  title: string;
+  chapterCount: number;
+  characterCount: number;
+  cloudUrl: string | null;
+  createdAt: string;
+}
+
+const HISTORY_KEY = "screenwriter-history";
+const MAX_HISTORY = 10;
+
+function loadHistory(): HistoryItem[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch { return []; }
+}
+
+function saveHistory(item: HistoryItem) {
+  const history = loadHistory().filter((h) => h.id !== item.id);
+  history.unshift(item);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+}
+
 export default function Home() {
   const [novelText, setNovelText] = useState("");
   const [chapters, setChapters] = useState<ChapterItem[]>([]);
@@ -32,16 +57,49 @@ export default function Home() {
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [convertProgress, setConvertProgress] = useState({ current: 0, total: 0, chapterTitle: "" });
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [viewMode, setViewMode] = useState<"input" | "result">("input");
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; size: number; chapters: number }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { theme, setTheme } = useTheme();
 
+  // Load history on mount
+  useEffect(() => { setHistory(loadHistory()); }, []);
+
   const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    if (ext !== "txt" && ext !== "md") { alert("目前仅支持 .txt 和 .md 文件"); return; }
-    const text = await file.text();
-    setNovelText(text);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await processFiles(Array.from(files));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const processFiles = async (files: File[]) => {
+    const validFiles = files.filter((f) => {
+      const ext = f.name.split(".").pop()?.toLowerCase();
+      return ext === "txt" || ext === "md" || ext === "docx";
+    });
+    if (validFiles.length === 0) { alert("目前仅支持 .txt、.md 和 .docx 文件"); return; }
+
+    let allText = "";
+    const fileInfo: { name: string; size: number; chapters: number }[] = [];
+    for (const file of validFiles) {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      let text: string;
+      if (ext === "docx") {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        text = result.value;
+      } else {
+        text = await file.text();
+      }
+      allText += (allText ? "\n\n" : "") + text;
+      // Quick chapter count
+      const chapterMatches = text.match(/^(#{0,3}\s*)(第[一二三四五六七八九十百零〇\d]+[章节回幕]|Chapter\s+\d+)/gim);
+      fileInfo.push({ name: file.name, size: file.size, chapters: chapterMatches?.length || 1 });
+    }
+    setNovelText(allText);
+    setUploadedFiles(fileInfo);
   };
 
   const handleParse = useCallback(async () => {
@@ -61,6 +119,7 @@ export default function Home() {
       setChapters(parsed);
       setSelectedChapters(new Set(parsed.map((c: ChapterItem) => c.number)));
       setScreenplay(null);
+      setViewMode("result");
       // Warn about long chapters (threshold: ~3000 tokens ≈ 6000 chars)
       const longChapters = parsed.filter((c) => c.content.length > 6000);
       if (longChapters.length > 0) {
@@ -92,77 +151,95 @@ export default function Home() {
     if (toConvert.length === 0) return;
     setIsConverting(true);
     setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "准备中..." });
-    const allScenes: ChapterScreenplay[] = [];
-    const allCharacters: Character[] = [];
 
-    for (let i = 0; i < toConvert.length; i++) {
-      const chapter = toConvert[i];
-      setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
+    try {
+      const res = await fetch("/api/convert-stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chapters: toConvert.map((c) => ({ number: c.number, title: c.title, content: c.content })),
+          existingCharacters: [],
+        }),
+      });
 
-      let lastError = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const res = await fetch("/api/convert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chapterNumber: chapter.number, chapterTitle: chapter.title, chapterContent: chapter.content, existingCharacters: allCharacters }),
-          });
-          const data = await res.json();
-          if (!data.success) {
-            lastError = data.error;
-            if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
-            break;
-          }
-          allScenes.push(data.data as ChapterScreenplay);
-          if (Array.isArray(data.characters)) {
-            for (const char of data.characters) {
-              if (!allCharacters.some((c) => c.name === char.name)) {
-                allCharacters.push(char);
+      if (!res.ok) throw new Error(`Stream request failed: ${res.status}`);
+      if (!res.body) throw new Error("No response body");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          let eventType = "";
+          for (const line of lines) {
+            if (line.startsWith("event: ")) {
+              eventType = line.slice(7);
+            } else if (line.startsWith("data: ")) {
+              let data: Record<string, unknown>;
+              try { data = JSON.parse(line.slice(6)); } catch { continue; }
+
+              if (eventType === "start") {
+                setConvertProgress({ current: 0, total: data.total as number, chapterTitle: "准备中..." });
+              } else if (eventType === "chapter-start") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "converting" as const } : c));
+                setConvertProgress((prev) => ({ ...prev, current: data.index as number, chapterTitle: data.title as string }));
+              } else if (eventType === "chapter-done") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "done" as const } : c));
+                setConvertProgress((prev) => ({ ...prev, current: (data.index as number) + 1 }));
+              } else if (eventType === "chapter-error") {
+                setChapters((prev) => prev.map((c) => c.number === data.number ? { ...c, status: "error" as const, error: data.error as string } : c));
+              } else if (eventType === "done" && (data.scenes as ChapterScreenplay[]).length > 0) {
+                const scenes = data.scenes as ChapterScreenplay[];
+                const characters = data.characters as Character[];
+                const finalScreenplay: Screenplay = {
+                  meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: scenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
+                  characters,
+                  chapters: scenes,
+                };
+                setScreenplay(finalScreenplay);
+
+                setIsSaving(true);
+                setCloudUrl(null);
+                try {
+                  const storageRes = await fetch("/api/storage", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
+                  });
+                  const storageData = await storageRes.json();
+                  if (storageData.success && storageData.data?.downloadUrl) {
+                    setCloudUrl(storageData.data.downloadUrl);
+                    const historyItem: HistoryItem = {
+                      id: `${Date.now()}`, title: finalScreenplay.meta.screenplay_title,
+                      chapterCount: finalScreenplay.chapters.length, characterCount: finalScreenplay.characters.length,
+                      cloudUrl: storageData.data.downloadUrl, createdAt: new Date().toISOString(),
+                    };
+                    saveHistory(historyItem);
+                    setHistory(loadHistory());
+                  }
+                } catch { /* Storage failure is non-blocking */ }
+                finally { setIsSaving(false); }
               }
             }
           }
-          setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
-          setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
-          lastError = "";
-          break;
-        } catch (err) {
-          lastError = err instanceof Error ? err.message : "未知错误";
-          if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
         }
-      }
-      if (lastError) {
-        setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "error" as const, error: lastError } : c));
-      }
-    }
-    if (allScenes.length > 0) {
-      const finalScreenplay: Screenplay = {
-        meta: { screenplay_title: "AI Screenplay", adaptation_of: "Novel", author: "AI", draft_version: "1.0", chapters_included: allScenes.map((s) => s.chapter_number), generated_at: new Date().toISOString() },
-        characters: allCharacters,
-        chapters: allScenes,
-      };
-      setScreenplay(finalScreenplay);
-
-      // Auto-save to Qiniu Kodo
-      setIsSaving(true);
-      setCloudUrl(null);
-      try {
-        const storageRes = await fetch("/api/storage", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ screenplay: finalScreenplay, format: "yaml" }),
-        });
-        const storageData = await storageRes.json();
-        if (storageData.success && storageData.data?.downloadUrl) {
-          setCloudUrl(storageData.data.downloadUrl);
-        }
-      } catch {
-        // Storage failure is non-blocking
       } finally {
-        setIsSaving(false);
+        reader.releaseLock();
       }
+    } catch (err) {
+      alert(`转换出错: ${err instanceof Error ? err.message : "未知错误"}`);
+    } finally {
+      setIsConverting(false);
+      setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
     }
-    setIsConverting(false);
-    setConvertProgress({ current: 0, total: 0, chapterTitle: "" });
   }, [chapters, selectedChapters]);
 
   const handleDownload = (format: "yaml" | "json") => {
@@ -210,44 +287,88 @@ export default function Home() {
 
       {/* Hero / Input Section */}
       <main className="flex-1">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center">
+        {viewMode === "input" ? (
+        <div
+          className="max-w-3xl mx-auto px-4 sm:px-6 pt-10 sm:pt-16 pb-8 sm:pb-12 text-center"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files);
+            if (files.length > 0) processFiles(files);
+          }}
+        >
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">小说转剧本</h1>
           <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10">粘贴小说文本，AI 自动转换为结构化剧本，简单又快速！</p>
 
-          {/* Textarea */}
+          {/* Textarea / File Info */}
           <div className="bg-card rounded-2xl shadow-sm border border-border p-4 sm:p-6 mb-6">
-            <Textarea
-              placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
-              className="min-h-[180px] sm:min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40"
-              value={novelText}
-              onChange={(e) => setNovelText(e.target.value)}
-            />
+            {uploadedFiles.length > 0 ? (
+              <div className="space-y-2">
+                {uploadedFiles.map((f, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-lg bg-muted/50 px-4 py-3">
+                    <FileText className="size-5 text-rose-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{f.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(f.size / 1024).toFixed(1)} KB · {f.chapters} 个章节
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => { setUploadedFiles([]); setNovelText(""); }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      移除
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Textarea
+                placeholder={"将小说文本粘贴到这里...\n\n支持的章节格式：第一章、第一节、第一回、Chapter 1"}
+                className="min-h-[180px] sm:min-h-[220px] resize-y text-sm border-0 bg-transparent focus-visible:ring-0 p-0 placeholder:text-muted-foreground/40"
+                value={novelText}
+                onChange={(e) => setNovelText(e.target.value)}
+              />
+            )}
           </div>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <input ref={fileInputRef} type="file" accept=".txt,.md" onChange={handleFileUpload} className="hidden" />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
-            >
-              <Upload className="size-5" />
-              选择小说文件
-            </button>
+            <input ref={fileInputRef} type="file" accept=".txt,.md,.docx" multiple onChange={handleFileUpload} className="hidden" />
+            <div className="flex flex-col items-center gap-1.5">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-14 px-8 sm:px-10 rounded-full bg-rose-500 hover:bg-rose-600 text-white text-base sm:text-lg font-semibold transition-colors shadow-lg shadow-rose-500/20 cursor-pointer min-w-[44px]"
+              >
+                <Upload className="size-5" />
+                选择小说文件
+              </button>
+              <span className="text-xs text-muted-foreground">当前支持 .txt / .md / .docx 格式，可多选</span>
+            </div>
             <button
               onClick={handleParse}
               disabled={!novelText.trim() || isParsing}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-12 sm:h-14 px-8 sm:px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base sm:text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer min-w-[44px]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 h-14 px-8 sm:px-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 text-base sm:text-lg font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer min-w-[44px]"
             >
               <FileText className="size-5" />
               {isParsing ? "解析中..." : "解析章节"}
             </button>
           </div>
-          <p className="text-sm text-muted-foreground/60 mt-4">或者把 .txt / .md 文件拖动到这里</p>
         </div>
+        ) : (
+        /* Result View */
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-8 pb-8">
+          <button
+            onClick={() => { setViewMode("input"); setChapters([]); setScreenplay(null); setCloudUrl(null); setWarnings([]); setConvertProgress({ current: 0, total: 0, chapterTitle: "" }); setUploadedFiles([]); setNovelText(""); }}
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            ← 返回上传
+          </button>
+        </div>
+        )}
 
-        {/* Conversion Progress */}
-        {convertProgress.total > 0 && (
+        {/* Conversion Progress - only in result mode */}
+        {viewMode === "result" && convertProgress.total > 0 && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-6">
             <div className="rounded-xl bg-card border border-border p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
@@ -277,7 +398,7 @@ export default function Home() {
         )}
 
         {/* Chapter List */}
-        {chapters.length > 0 && (
+        {viewMode === "result" && chapters.length > 0 && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8">
             <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -329,7 +450,7 @@ export default function Home() {
         )}
 
         {/* Screenplay Output */}
-        {screenplay && (
+        {viewMode === "result" && screenplay && (
           <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-16">
             <Card className="border-border shadow-sm">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
@@ -454,6 +575,27 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* History */}
+      {viewMode === "input" && history.length > 0 && !screenplay && (
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 pb-8 w-full">
+          <h3 className="text-sm font-medium text-muted-foreground mb-3">最近转换</h3>
+          <div className="space-y-2">
+            {history.map((item) => (
+              <div key={item.id} className="flex items-center justify-between rounded-lg border border-border bg-card p-3 hover:bg-accent/50 transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{item.title}</p>
+                  <p className="text-xs text-muted-foreground">{item.chapterCount} 章 · {item.characterCount} 角色 · {new Date(item.createdAt).toLocaleDateString("zh-CN")}</p>
+                </div>
+                {item.cloudUrl && (
+                  <a href={item.cloudUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-500 hover:underline shrink-0 ml-3">下载</a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border bg-card py-4">
