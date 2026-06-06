@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ChapterScreenplaySchema, type Character, type ChapterScreenplay } from "./schema";
+import { ChapterScreenplaySchema, CharacterSchema, type Character, type ChapterScreenplay } from "./schema";
 
 export interface LLMConfig {
   apiKey: string;
@@ -10,48 +10,46 @@ export interface LLMConfig {
 export interface ConvertResult {
   success: boolean;
   data?: ChapterScreenplay;
+  characters?: Character[];
   error?: string;
 }
 
-const SYSTEM_PROMPT = `你是一位专业的剧本改编师。你的任务是将小说章节转换为结构化的剧本格式。
+const SYSTEM_PROMPT = `你是一位专业的剧本改编师。将小说章节转换为 JSON 格式的剧本。
 
-## 输出要求
+## 必须严格遵守的 JSON 结构（字段名不可改动）
 
-你必须输出一个严格的 JSON 对象，只包含当前章节的剧本数据（不要包含 meta 或 characters 顶层字段）。格式如下：
+{"chapter_number":1,"chapter_title":"第一章 标题","scene_count":1,"characters":[{"id":"CHAR_1","name":"角色名","aliases":[],"role":"主角/配角","description":"简介","traits":["特征"]}],"scenes":[{"scene_id":"CH1_SC1","scene_heading":"INT. 地点 - 时间","location":"地点名","time":"时间描述","characters_present":["角色A"],"action":"舞台指示/动作描写文字","dialogues":[{"index":1,"speaker":"说话人","text":"台词内容"}]}]}
 
-{
-  "chapter_number": number,
-  "chapter_title": string,
-  "scene_count": number,
-  "scenes": [{
-    "scene_id": "CH{章节号}_SC{场景序号}",
-    "scene_heading": "INT./EXT. 地点 - 时间",
-    "location": string,
-    "time": string,
-    "characters_present": [string],
-    "action": string,
-    "dialogues": [{
-      "index": number,
-      "speaker": string,
-      "to": string (可选),
-      "text": string,
-      "emotion": string (可选),
-      "action": string (可选),
-      "subtext": string (可选)
-    }],
-    "notes": string (可选)
-  }]
-}
+## 字段说明
+
+characters 数组：
+- id: 唯一标识，格式 CHAR_N（N 从 1 递增）
+- name: 角色姓名
+- aliases: 别名列表，无则为空数组
+- role: "主角"、"反派"、"配角" 之一
+- description: 外貌与身份简介
+- traits: 性格特征数组
+
+scenes 数组：
+- scene_id: 格式必须是 CH{章节号}_SC{场景序号}，如 CH1_SC1
+- scene_heading: 必须以 INT. 或 EXT. 开头，后接地点和时间
+- action: 叙述性文字转成的舞台指示，是 string 不是 array
+- dialogues: 对话数组，每项必须有 index、speaker、text
+- 如果无对话，dialogues 为空数组 []
+- 可选字段（有则加，无则省略）：to、emotion、action(dialogue内)、subtext、notes
 
 ## 转换规则
 
-1. **场景分割**：根据地点、时间、事件变化自动识别场景切换点
-2. **场景头格式**：使用 INT./EXT. 地点 - 时间 的标准格式
-3. **对话提取**：准确提取角色对白，保留原文
-4. **动作描写**：将叙述性文字转换为舞台指示格式
-5. **情绪标注**：根据上下文推断角色情绪
-6. **潜台词**：当角色话语有言外之意时标注
-7. **角色名称**：保持一致，使用小说中的原名`;
+1. 提取章节中所有出现的角色，填入 characters
+2. 根据地点/时间/事件变化分割场景
+3. 准确提取对白，保留原文
+4. 叙述性文字转为舞台指示
+5. 根据上下文推断情绪
+6. 保持角色名一致
+
+## 输出
+
+只输出 JSON，无其他文字。`;
 
 function buildUserPrompt(
   chapter: { number: number; title: string; content: string },
@@ -113,15 +111,27 @@ export async function convertChapterToScreenplay(
     }
 
     // Parse JSON response (guaranteed valid by json_object mode)
-    let parsed: unknown;
+    let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(content);
     } catch {
       return { success: false, error: `Invalid JSON response from LLM: ${content.slice(0, 200)}` };
     }
 
-    // Validate against schema
-    const result = ChapterScreenplaySchema.safeParse(parsed);
+    // Extract and validate characters
+    const rawCharacters = Array.isArray(parsed.characters) ? parsed.characters : [];
+    const characters: Character[] = [];
+    for (const raw of rawCharacters) {
+      const charResult = CharacterSchema.safeParse(raw);
+      if (charResult.success) {
+        characters.push(charResult.data);
+      }
+    }
+
+    // Validate chapter screenplay (remove characters from parsed before validation)
+    const chapterData = { ...parsed };
+    delete chapterData.characters;
+    const result = ChapterScreenplaySchema.safeParse(chapterData);
     if (!result.success) {
       return {
         success: false,
@@ -129,7 +139,7 @@ export async function convertChapterToScreenplay(
       };
     }
 
-    return { success: true, data: result.data };
+    return { success: true, data: result.data, characters };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: `LLM API error: ${message}` };
