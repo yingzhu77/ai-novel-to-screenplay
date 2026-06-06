@@ -207,9 +207,15 @@ export default function Home() {
                 };
                 setScreenplay(finalScreenplay);
 
+                // Generate history title from scene chapter titles
+                const chapterTitles = scenes.map((s) => s.chapter_title);
+                const historyTitle = chapterTitles.length > 0
+                  ? (chapterTitles.length <= 2 ? chapterTitles.join(" / ") : `${chapterTitles[0]} / ${chapterTitles[1]} 等${chapterTitles.length}章`)
+                  : "AI Screenplay";
+
                 // Save to local history (without cloud URL)
                 const historyItem: HistoryItem = {
-                  id: `${Date.now()}`, title: finalScreenplay.meta.screenplay_title,
+                  id: `${Date.now()}`, title: historyTitle,
                   chapterCount: finalScreenplay.chapters.length, characterCount: finalScreenplay.characters.length,
                   cloudUrl: null, createdAt: new Date().toISOString(),
                 };
