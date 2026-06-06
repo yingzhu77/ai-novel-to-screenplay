@@ -190,6 +190,8 @@ export default function Home() {
               let data: Record<string, unknown>;
               try { data = JSON.parse(line.slice(6)); } catch { continue; }
 
+              console.log("SSE event:", eventType, data);
+
               if (eventType === "start") {
                 setConvertProgress({ current: 0, total: data.total as number, chapterTitle: "准备中..." });
               } else if (eventType === "chapter-start") {
