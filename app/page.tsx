@@ -496,7 +496,10 @@ export default function Home() {
                       <label htmlFor="cloud-consent" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                         我已了解并同意：保存到云端意味着我的内容将存储在<strong className="text-foreground">共享存储桶</strong>中，
                         虽然有签名 URL 保护，但<strong className="text-amber-600 dark:text-amber-400">仍存在数据泄露风险</strong>。
-                        建议仅保存非敏感内容。
+                        建议仅保存非敏感内容。<br/>
+                        <span className="text-muted-foreground/70">
+                          提示：不保存到云端，当前页面仍可下载 YAML/JSON 文件；但返回后历史记录将无法下载。保存到云端后可随时从历史记录下载。
+                        </span>
                       </label>
                     </div>
                     <Button
@@ -526,8 +529,8 @@ export default function Home() {
                       <div className="rounded-lg bg-muted/50 p-3">
                         <h3 className="font-semibold text-sm mb-2">角色 ({screenplay.characters.length})</h3>
                         <div className="space-y-2">
-                          {screenplay.characters.map((c) => (
-                            <div key={c.id} className="flex items-start gap-2 bg-card rounded-lg border border-border p-2">
+                          {screenplay.characters.map((c, i) => (
+                            <div key={`${c.id}-${i}`} className="flex items-start gap-2 bg-card rounded-lg border border-border p-2">
                               <span className="inline-flex items-center rounded-full bg-rose-500/10 text-rose-500 dark:bg-rose-500/20 px-2 py-0.5 text-xs font-medium shrink-0">{c.role}</span>
                               <div className="min-w-0">
                                 <span className="font-medium text-sm">{c.name}</span>
@@ -607,12 +610,12 @@ export default function Home() {
                               );
                             })}
                             {/* Nodes */}
-                            {screenplay.characters.map((c) => {
+                            {screenplay.characters.map((c, i) => {
                               const pos = positions.get(c.name);
                               if (!pos) return null;
                               const color = roleColors[c.role] || "#6b7280";
                               return (
-                                <g key={c.id}>
+                                <g key={`${c.id}-${i}`}>
                                   <circle cx={pos.x} cy={pos.y} r={18} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.5} />
                                   <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
                                     className="fill-foreground text-[10px] font-medium">{c.name}</text>
