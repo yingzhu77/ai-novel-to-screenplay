@@ -46,6 +46,11 @@ export async function POST(request: Request) {
           const chapter: ChapterInput = chapters[i];
           send("chapter-start", { index: i, number: chapter.number, title: chapter.title });
 
+          // Rate limit: wait between requests to avoid 429 errors
+          if (i > 0) {
+            await new Promise((r) => setTimeout(r, 2000)); // 2 second delay between chapters
+          }
+
           let lastError = "";
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
@@ -57,7 +62,9 @@ export async function POST(request: Request) {
 
               if (!result.success) {
                 lastError = result.error || "Unknown error";
-                if (attempt === 0) { await new Promise((r) => setTimeout(r, 1000)); continue; }
+                // If rate limit error, wait longer before retry
+                const isRateLimit = lastError.includes("429") || lastError.includes("rate limit");
+                if (attempt === 0) { await new Promise((r) => setTimeout(r, isRateLimit ? 5000 : 1000)); continue; }
                 break;
               }
 
