@@ -8,6 +8,20 @@
 
 🔗 **[点击体验](https://aiscreenplay.yingzhu.xyz)**
 
+## 界面截图
+
+### 浅色模式
+![浅色页面主页](docs/screenshots/浅色页面主页.png)
+
+### 深色模式
+![深色页面主页](docs/screenshots/深色页面主页.png)
+
+### 转换效果
+![转换后页面](docs/screenshots/转换后页面.png)
+
+### 角色关系图
+![转换后关系预览](docs/screenshots/转换后关系预览.png)
+
 ## 功能特点
 
 - **智能章节识别** — 支持中文（第X章/节/回）、英文（Chapter X）、Markdown 标题格式
@@ -17,9 +31,11 @@
 - **角色关系图** — 可视化角色之间的关系网络
 - **原文对比** — 并排查看小说原文与转换后的剧本
 - **结构化输出** — 自定义 YAML Schema，支持 YAML/JSON 双格式下载
-- **云端存储** — 自动保存到对象存储，24 小时内可重复下载
+- **云端存储** — 手动保存到对象存储，24 小时内可重复下载
+- **隐私保护** — 云端保存需用户明确同意，提示数据泄露风险
 - **深色模式** — 支持亮色/暗色主题切换
 - **响应式设计** — 适配桌面端和移动端
+- **单章重试** — 转换失败可单独重试，不影响其他章节
 
 ## 技术架构
 
@@ -118,7 +134,7 @@ meta:
 characters:
   - id: CHAR_1
     name: 角色名
-    role: 主角/配角
+    role: 主角/反派/配角
     description: 外貌与身份简介
     traits: [性格特征]
 
@@ -143,20 +159,30 @@ chapters:
 │   ├── page.tsx                  # 首页（完整交互流程）
 │   ├── layout.tsx                # 根布局
 │   └── api/
-│       ├── convert/route.ts      # 单章转换 API
 │       ├── convert-stream/route.ts # SSE 流式转换
 │       ├── parse/route.ts        # 章节解析 API
 │       └── storage/route.ts      # 云端存储 API
+├── components/
+│   ├── app/                      # 页面组件
+│   │   ├── Navbar.tsx            # 导航栏
+│   │   ├── InputSection.tsx      # 输入区域
+│   │   ├── ChapterList.tsx       # 章节列表
+│   │   ├── ConversionProgress.tsx # 进度条
+│   │   ├── ScreenplayOutput.tsx  # 剧本输出
+│   │   └── HistoryPanel.tsx      # 历史记录
+│   └── ui/                       # shadcn/ui 组件
 ├── lib/
 │   ├── schema.ts                 # Zod Schema 定义
 │   ├── splitter.ts               # 章节拆分器
 │   ├── llm.ts                    # LLM API 封装
 │   └── qiniu.ts                  # 对象存储封装
 ├── types/
-│   └── screenplay.ts             # TypeScript 类型
+│   ├── screenplay.ts             # 剧本类型
+│   └── app.ts                    # 应用类型
 ├── docs/
-│   └── yaml-schema-design.md     # Schema 设计文档
-└── components/ui/                # shadcn/ui 组件
+│   ├── yaml-schema-design.md     # Schema 设计文档
+│   └── screenshots/              # 界面截图
+└── scripts/                      # 工具脚本
 ```
 
 ## 测试
@@ -183,6 +209,20 @@ MIT
 
 🔗 **[Try it now](https://aiscreenplay.yingzhu.xyz)**
 
+### Screenshots
+
+#### Light Mode
+![Light Mode](docs/screenshots/浅色页面主页.png)
+
+#### Dark Mode
+![Dark Mode](docs/screenshots/深色页面主页.png)
+
+#### Conversion Result
+![Conversion Result](docs/screenshots/转换后页面.png)
+
+#### Character Relationship Graph
+![Character Relationship Graph](docs/screenshots/转换后关系预览.png)
+
 ### Features
 
 - **Smart chapter detection** — Chinese (第X章/节/回), English (Chapter X), Markdown headers
@@ -192,9 +232,11 @@ MIT
 - **Character relationship graph** — Visual relationship network
 - **Comparison view** — Side-by-side novel text vs screenplay
 - **Structured output** — YAML/JSON download with custom Schema
-- **Cloud storage** — Auto-save with 24h signed download URLs
+- **Cloud storage** — Manual save with 24h signed download URLs
+- **Privacy protection** — Explicit consent required for cloud save, data risk warnings
 - **Dark mode** — Light/dark theme toggle
 - **Responsive** — Desktop and mobile optimized
+- **Single chapter retry** — Retry failed chapters without affecting others
 
 ### Tech Stack
 
