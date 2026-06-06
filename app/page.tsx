@@ -91,13 +91,12 @@ export default function Home() {
     const toConvert = chapters.filter((c) => selectedChapters.has(c.number) && c.status !== "done");
     if (toConvert.length === 0) return;
     setIsConverting(true);
-    setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "" });
+    setConvertProgress({ current: 0, total: toConvert.length, chapterTitle: "准备中..." });
     const allScenes: ChapterScreenplay[] = [];
     const allCharacters: Character[] = [];
 
     for (let i = 0; i < toConvert.length; i++) {
       const chapter = toConvert[i];
-      setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
       setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "converting" as const } : c));
 
       let lastError = "";
@@ -123,6 +122,7 @@ export default function Home() {
             }
           }
           setChapters((prev) => prev.map((c) => c.number === chapter.number ? { ...c, status: "done" as const } : c));
+          setConvertProgress({ current: i + 1, total: toConvert.length, chapterTitle: chapter.title });
           lastError = "";
           break;
         } catch (err) {
