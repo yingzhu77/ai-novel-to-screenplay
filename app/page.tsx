@@ -362,7 +362,6 @@ export default function Home() {
                 <Tabs defaultValue="preview">
                   <TabsList className="h-9">
                     <TabsTrigger value="preview" className="text-xs">预览</TabsTrigger>
-                    <TabsTrigger value="relations" className="text-xs">关系</TabsTrigger>
                     <TabsTrigger value="compare" className="text-xs">对比</TabsTrigger>
                     <TabsTrigger value="yaml" className="text-xs">YAML</TabsTrigger>
                     <TabsTrigger value="json" className="text-xs">JSON</TabsTrigger>
@@ -403,81 +402,6 @@ export default function Home() {
                           ))}
                         </div>
                       ))}
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="relations" className="mt-3">
-                    <div className="rounded-lg bg-muted/50 p-4">
-                      {screenplay.characters.length < 2 ? (
-                        <p className="text-xs text-muted-foreground text-center py-8">至少需要 2 个角色才能生成关系图</p>
-                      ) : (() => {
-                        // Build relationship edges from scene co-occurrence
-                        const edges: { from: string; to: string; weight: number }[] = [];
-                        const edgeMap = new Map<string, number>();
-                        for (const ch of screenplay.chapters) {
-                          for (const scene of ch.scenes) {
-                            const chars = scene.characters_present;
-                            for (let a = 0; a < chars.length; a++) {
-                              for (let b = a + 1; b < chars.length; b++) {
-                                const key = [chars[a], chars[b]].sort().join("|||");
-                                edgeMap.set(key, (edgeMap.get(key) || 0) + 1);
-                              }
-                            }
-                          }
-                        }
-                        edgeMap.forEach((weight, key) => {
-                          const [from, to] = key.split("|||");
-                          edges.push({ from, to, weight });
-                        });
-
-                        // Layout characters in a circle
-                        const n = screenplay.characters.length;
-                        const cx = 200, cy = 150, r = 100;
-                        const positions = new Map<string, { x: number; y: number }>();
-                        screenplay.characters.forEach((c, i) => {
-                          const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-                          positions.set(c.name, { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-                        });
-
-                        const roleColors: Record<string, string> = { "主角": "#f43f5e", "反派": "#8b5cf6", "配角": "#6b7280" };
-
-                        return (
-                          <svg viewBox="0 0 400 300" className="w-full max-w-md mx-auto">
-                            {/* Edges */}
-                            {edges.map((e) => {
-                              const p1 = positions.get(e.from);
-                              const p2 = positions.get(e.to);
-                              if (!p1 || !p2) return null;
-                              return (
-                                <line key={e.from + e.to} x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
-                                  stroke="currentColor" strokeOpacity={0.2} strokeWidth={Math.min(e.weight * 1.5, 4)} />
-                              );
-                            })}
-                            {/* Nodes */}
-                            {screenplay.characters.map((c) => {
-                              const pos = positions.get(c.name);
-                              if (!pos) return null;
-                              const color = roleColors[c.role] || "#6b7280";
-                              return (
-                                <g key={c.id}>
-                                  <circle cx={pos.x} cy={pos.y} r={18} fill={color} fillOpacity={0.15} stroke={color} strokeWidth={1.5} />
-                                  <text x={pos.x} y={pos.y + 1} textAnchor="middle" dominantBaseline="middle"
-                                    className="fill-foreground text-[10px] font-medium">{c.name}</text>
-                                  <text x={pos.x} y={pos.y + 12} textAnchor="middle"
-                                    className="fill-muted-foreground text-[7px]">{c.role}</text>
-                                </g>
-                              );
-                            })}
-                          </svg>
-                        );
-                      })()}
-                      {/* Legend */}
-                      {screenplay.characters.length >= 2 && (
-                        <div className="flex justify-center gap-4 mt-3">
-                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-rose-500/30 border border-rose-500" />主角</span>
-                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-purple-500/30 border border-purple-500" />反派</span>
-                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="w-2.5 h-2.5 rounded-full bg-gray-500/30 border border-gray-500" />配角</span>
-                        </div>
-                      )}
                     </div>
                   </TabsContent>
                   <TabsContent value="compare" className="mt-3">
