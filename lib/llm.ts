@@ -74,6 +74,7 @@ export async function convertChapterToScreenplay(
     const client = new OpenAI({
       apiKey: config.apiKey,
       baseURL: config.baseUrl,
+      timeout: 120000, // 2 minutes timeout
     });
 
     const userPrompt = buildUserPrompt(chapter, existingCharacters);

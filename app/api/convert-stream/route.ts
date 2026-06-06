@@ -1,7 +1,7 @@
 import { convertChapterToScreenplay } from "@/lib/llm";
 import type { Character, ChapterScreenplay } from "@/lib/schema";
 
-export const maxDuration = 120;
+export const maxDuration = 300; // 5 minutes for long chapters
 
 interface ChapterInput {
   number: number;
