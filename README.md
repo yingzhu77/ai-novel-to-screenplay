@@ -8,6 +8,8 @@
 
 🔗 **[点击体验](https://aiscreenplay.yingzhu.xyz)**
 
+📹 **[Demo 视频](https://www.bilibili.com/video/待发布后填入)**
+
 ## 界面截图
 
 ### 浅色模式
@@ -208,6 +210,8 @@ MIT
 ### Live Demo
 
 🔗 **[Try it now](https://aiscreenplay.yingzhu.xyz)**
+
+📹 **[Demo Video](https://www.bilibili.com/video/待发布后填入)**
 
 ### Screenshots
 
