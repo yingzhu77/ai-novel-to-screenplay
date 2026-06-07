@@ -2,11 +2,19 @@ import { splitChapters } from "@/lib/splitter";
 
 export async function POST(request: Request) {
   try {
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength) > 5 * 1024 * 1024) {
+      return Response.json(
+        { success: false, error: "Text too large (max 5MB)" },
+        { status: 413 }
+      );
+    }
+
     const { text } = await request.json();
 
-    if (!text?.trim()) {
+    if (typeof text !== "string" || !text.trim()) {
       return Response.json(
-        { success: false, error: "text is required" },
+        { success: false, error: "text is required and must be a string" },
         { status: 400 }
       );
     }

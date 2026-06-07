@@ -54,8 +54,8 @@ export function ChapterList({
         </CardHeader>
         {warnings.length > 0 && (
           <div className="px-4 pb-3">
-            {warnings.map((w) => (
-              <p key={w} className={`text-xs rounded-md px-3 py-1.5 ${w.includes("过长") ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10" : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10"}`}>{w}</p>
+            {warnings.map((w, i) => (
+              <p key={`warn-${i}`} className={`text-xs rounded-md px-3 py-1.5 ${w.includes("过长") ? "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10" : "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10"}`}>{w}</p>
             ))}
           </div>
         )}

@@ -102,6 +102,9 @@ export function splitChapters(text: string): Chapter[] {
     return [];
   }
 
+  // Normalize line endings (CRLF -> LF) to prevent content corruption
+  text = text.replace(/\r\n?/g, "\n");
+
   const matches = findChapterMatches(text);
 
   if (matches.length === 0) {
