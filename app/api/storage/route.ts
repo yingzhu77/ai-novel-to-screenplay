@@ -12,7 +12,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const title = screenplay.meta?.screenplay_title || "screenplay";
+    if (format !== "yaml" && format !== "json") {
+      return Response.json(
+        { success: false, error: "format must be 'yaml' or 'json'" },
+        { status: 400 }
+      );
+    }
+
+    const title = (screenplay.meta?.screenplay_title || "screenplay")
+      .replace(/[^a-zA-Z0-9一-鿿_-]/g, "_")
+      .slice(0, 100);
     const timestamp = Date.now();
     const key = `screenplays/${title}_${timestamp}.${format}`;
 

@@ -14,10 +14,26 @@ function sseEvent(event: string, data: unknown): string {
 }
 
 export async function POST(request: Request) {
-  const { chapters, existingCharacters = [] } = await request.json();
+  let chapters: ChapterInput[];
+  let existingCharacters: Character[] = [];
+
+  try {
+    const body = await request.json();
+    chapters = body.chapters;
+    existingCharacters = body.existingCharacters || [];
+  } catch {
+    return Response.json({ success: false, error: "Invalid JSON body" }, { status: 400 });
+  }
 
   if (!Array.isArray(chapters) || chapters.length === 0) {
     return Response.json({ success: false, error: "chapters array is required" }, { status: 400 });
+  }
+
+  // Validate each chapter has required fields
+  for (const ch of chapters) {
+    if (!ch.number || !ch.title || !ch.content) {
+      return Response.json({ success: false, error: "Each chapter must have number, title, and content" }, { status: 400 });
+    }
   }
 
   const apiKey = process.env.DEEPSEEK_API_KEY;
@@ -32,8 +48,13 @@ export async function POST(request: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let isAborted = false;
+      request.signal.addEventListener("abort", () => { isAborted = true; });
+
       const send = (event: string, data: unknown) => {
-        controller.enqueue(new TextEncoder().encode(sseEvent(event, data)));
+        if (!isAborted) {
+          controller.enqueue(new TextEncoder().encode(sseEvent(event, data)));
+        }
       };
 
       try {
@@ -43,6 +64,8 @@ export async function POST(request: Request) {
         const allCharacters: Character[] = [...existingCharacters];
 
         for (let i = 0; i < chapters.length; i++) {
+          if (isAborted) break;
+
           const chapter: ChapterInput = chapters[i];
           send("chapter-start", { index: i, number: chapter.number, title: chapter.title });
 
