@@ -8,7 +8,7 @@
 
 🔗 **[点击体验](https://aiscreenplay.yingzhu.xyz)**
 
-📹 **[Demo 视频](https://www.bilibili.com/video/待发布后填入)**
+📹 **[Demo 视频](https://www.bilibili.com/video/BV1rNEs6DEB1)**
 
 ## 界面截图
 
@@ -211,7 +211,7 @@ MIT
 
 🔗 **[Try it now](https://aiscreenplay.yingzhu.xyz)**
 
-📹 **[Demo Video](https://www.bilibili.com/video/待发布后填入)**
+📹 **[Demo Video](https://www.bilibili.com/video/BV1rNEs6DEB1)**
 
 ### Screenshots
 
